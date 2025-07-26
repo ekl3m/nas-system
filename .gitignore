@@ -1,0 +1,59 @@
+# === GLOBAL ===
+*.log
+*.tmp
+*.bak
+*.swp
+.DS_Store
+Thumbs.db
+
+# === BACKEND (Spring Boot / Maven) ===
+/backend/target/
+/backend/.mvn/
+/backend/mvnw
+/backend/mvnw.cmd
+/backend/.idea/
+/backend/.classpath
+/backend/.project
+/backend/.settings/
+/backend/HELP.md
+
+# IntelliJ IDEA
+*.iml
+.idea/
+
+# === FRONTEND (React) ===
+/frontend/node_modules/
+/frontend/build/
+/frontend/dist/
+/frontend/.env.local
+/frontend/.env.development.local
+/frontend/.env.test.local
+/frontend/.env.production.local
+
+# === SYSTEM / OS ===
+*.bak
+*.old
+*.orig
+*.tmp
+*.~*
+
+# === PYTHON (jeśli coś testowo dodajesz) ===
+*.pyc
+__pycache__/
+
+# === BACKUP / DANE / ZRZUTY ===
+/dane/
+/backup/
+/storage/
+*.zip
+*.tar.gz
+
+# === VS CODE ===
+.vscode/
+
+# === LOGI / BAZY TESTOWE ===
+*.db
+*.sqlite
+*.log
+*.pid
+*.out
