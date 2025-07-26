@@ -46,27 +46,27 @@ Ensure you have Java 21+ and Maven installed. Modify application.properties if n
 
 ## Features
 
-•	Upload, browse, delete and download files
-•	View system info (RAM, CPU, Disk usage)
-•	Schedule and perform data backups
-•	View system logs and transfer history
-•	Simple and clean web interface
+•	Upload, browse, delete and download files  
+•	View system info (RAM, CPU, Disk usage)  
+•	Schedule and perform data backups  
+•	View system logs and transfer history  
+•	Simple and clean web interface  
 
 ## Usage
 
 Once both parts are running:
 
-•	Open the frontend in your browser (e.g. http://localhost:3000)
-•	Connect to the backend API (set in frontend config)
-•	Start uploading, browsing, or managing files via the UI
+•	Open the frontend in your browser (e.g. http://localhost:3000)  
+•	Connect to the backend API (set in frontend config)  
+•	Start uploading, browsing, or managing files via the UI  
 
 ## Hardware Setup
 
 This project is designed to run on Raspberry Pi 5 + Radxa HAT with SATA drives.
 
-•	Connect drives via SATA HAT
-•	Insert microSD with OS and deploy the backend
-•	(Optional) Use systemd to autostart the backend on boot
+•	Connect drives via SATA HAT  
+•	Insert microSD with OS and deploy the backend  
+•	(Optional) Use systemd to autostart the backend on boot  
 
 ## License
 
