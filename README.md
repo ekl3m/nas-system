@@ -92,5 +92,5 @@ A1gor:
 - Email: 245803@edu.p.lodz.pl
 - GitHub: [A1gor](https://github.com/A1gor)
 
-> Educational project made with passion and caffeine ☕3.  
+> Educational project made with passion and caffeine ☕.  
 > If you find it useful, give it a ⭐!
