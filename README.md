@@ -89,7 +89,7 @@ ekl3m:
 - GitHub: [ekl3m](https://github.com/ekl3m)
 
 A1gor:
-- Email: 245803@edu.p.lodz.pl
+- Email: igorfornal222@gmail.com
 - GitHub: [A1gor](https://github.com/A1gor)
 
 > Educational project made with passion and caffeine ☕.  
