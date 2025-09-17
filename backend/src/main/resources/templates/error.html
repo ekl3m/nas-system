@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Error</title>
+    <link rel="stylesheet" href="/css/login.css">
+</head>
+
+<body>
+    <div class="login-container">
+        <h1>Error <span th:text="${status}">500</span></h1>
+        <p class="login-subtitle">Oops! Something went wrong.</p>
+        <button onclick="window.location.href='/home'">Go Home</button>
+    </div>
+</body>
+
+</html>

@@ -11,6 +11,11 @@
     <div class="login-container">
         <h1>Login</h1>
         <p class="login-subtitle">Raspberry Pi 5 NAS System</p>
+
+        <div th:if="${loginError}" class="error-message">
+            Incorrect username or password!
+        </div>
+
         <form th:action="@{/performLogin}" method="post">
             <div class="input-group">
                 <span class="input-icon">&#128100;</span>
