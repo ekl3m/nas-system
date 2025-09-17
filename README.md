@@ -25,7 +25,7 @@ This is **not a commercial product**, but a student project created as part of a
   ```sh
     ./mvnw spring-boot:run
   ```
-4.	The server should start at http://localhost:5000/api
+4.	The server should start at http://localhost:8080/home
 
 Ensure you have Java 21+ and Maven installed. Modify application.properties if needed.
 
