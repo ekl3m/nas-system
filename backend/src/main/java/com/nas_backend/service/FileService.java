@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.core.io.Resource;
 
 import java.io.ByteArrayOutputStream;
@@ -57,6 +58,21 @@ public class FileService {
             return getFile(relativePath); // Return an usual file
         }
     }
+
+    public void uploadFile(String relativePath, MultipartFile file) throws IOException {
+        File folder = resolvePath(relativePath);
+
+        if (!folder.exists() || !folder.isDirectory()) {
+            throw new IOException("Destination folder not found");
+        }
+
+        File destination = new File(folder, file.getOriginalFilename()).getCanonicalFile();
+
+        // Save in storage
+        file.transferTo(destination);
+    }
+
+    // Private methods
 
     private Resource getFile(String relativePath) throws IOException {
         File file = resolvePath(relativePath);

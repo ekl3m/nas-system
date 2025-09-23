@@ -11,8 +11,11 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
+                .csrf(csrf -> csrf
+                        .ignoringRequestMatchers("/api/files/**")) // temporarily disable CSRF 
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/login", "/performLogin", "/css/**", "/js/**", "/images/**", "/error").permitAll() // Do not require authentication for these endpoints
+                        .requestMatchers("/api/files/**").permitAll() // temporarily do not require authentication for API endpoints
                         .anyRequest().authenticated())
                 .formLogin(form -> form
                         .loginPage("/login") // Login page endpoint

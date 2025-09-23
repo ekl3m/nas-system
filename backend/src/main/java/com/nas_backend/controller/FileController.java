@@ -11,9 +11,11 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.nas_backend.service.FileService;
 import com.nas_backend.model.FileInfo;
@@ -63,6 +65,24 @@ public class FileController {
         } catch (IOException e) {
             Map<String, String> error = new HashMap<>();
             error.put("error", "File or folder not found / internal error");
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
+    }
+
+    @PostMapping("/upload")
+    public ResponseEntity<?> upload(@RequestParam(name = "path") String path, @RequestParam(name = "file") MultipartFile file) {
+        try {
+            fileService.uploadFile(path, file);
+            Map<String, String> response = new HashMap<>();
+            response.put("message", "File uploaded successfully");
+            return ResponseEntity.ok(response);
+        } catch (SecurityException e) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", "Access denied: path outside storage");
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
+        } catch (IOException e) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", "Upload failed: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
         }
     }
