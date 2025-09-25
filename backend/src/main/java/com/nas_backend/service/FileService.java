@@ -60,7 +60,7 @@ public class FileService {
         }
     }
 
-    public void uploadFile(String relativePath, MultipartFile file) throws IOException {
+    public void uploadFile(String relativePath, MultipartFile file, boolean overwrite) throws IOException {
         File folder = resolvePath(relativePath);
 
         if (!folder.exists() || !folder.isDirectory()) {
@@ -68,6 +68,10 @@ public class FileService {
         }
 
         File destination = new File(folder, file.getOriginalFilename()).getCanonicalFile();
+
+        if (destination.exists() && !overwrite) {
+            throw new IOException("File already exists. Set overwrite=true to replace it.");
+        }
 
         // Save in storage
         file.transferTo(destination);

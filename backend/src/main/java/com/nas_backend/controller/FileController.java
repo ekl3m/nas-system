@@ -80,12 +80,13 @@ public class FileController {
     @PostMapping("/upload")
     public ResponseEntity<?> upload(@RequestHeader(name = "Authorization", required = false) String authHeader,
             @RequestParam(name = "path") String path,
-            @RequestParam(name = "file") MultipartFile file) {
+            @RequestParam(name = "file") MultipartFile file,
+            @RequestParam(name = "overwrite", required = false, defaultValue = "false") boolean overwrite) {
         String username = requireValidUser(authHeader);
 
         try {
             String userPath = username + "/" + path;
-            fileService.uploadFile(userPath, file);
+            fileService.uploadFile(userPath, file, overwrite);
             return ResponseEntity.ok(Map.of("message", "File uploaded successfully"));
         } catch (SecurityException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Access denied: path outside storage"));
