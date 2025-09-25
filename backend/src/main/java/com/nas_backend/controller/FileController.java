@@ -93,4 +93,20 @@ public class FileController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Upload failed: " + e.getMessage()));
         }
     }
+
+    @DeleteMapping("/delete")
+    public ResponseEntity<?> deleteFile(@RequestHeader(name = "Authorization", required = false) String authHeader,
+            @RequestParam(name = "path") String path) {
+        String username = requireValidUser(authHeader);
+
+        try {
+            String userPath = username + "/" + path;
+            fileService.deleteResource(userPath);
+            return ResponseEntity.ok(Map.of("message", "File deleted successfully"));
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Access denied: path outside storage"));
+        } catch (IOException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Delete failed: " + e.getMessage()));
+        }
+    }
 }

@@ -12,6 +12,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -70,6 +71,20 @@ public class FileService {
 
         // Save in storage
         file.transferTo(destination);
+    }
+
+    public void deleteResource(String relativePath) throws IOException {
+        File file = resolvePath(relativePath);
+
+        if (!file.exists()) {
+            throw new IOException("File not found");
+        }
+
+        if (file.isDirectory()) {
+            deleteDirectoryRecursively(file);
+        } else {
+            Files.delete(file.toPath());
+        }
     }
 
     // Private methods
@@ -134,5 +149,19 @@ public class FileService {
                 zos.write(bytes, 0, length);
             }
         }
+    }
+
+    private void deleteDirectoryRecursively(File dir) throws IOException {
+        File[] entries = dir.listFiles();
+        if (entries != null) {
+            for (File entry : entries) {
+                if (entry.isDirectory()) {
+                    deleteDirectoryRecursively(entry);
+                } else {
+                    Files.delete(entry.toPath());
+                }
+            }
+        }
+        Files.delete(dir.toPath());
     }
 }
