@@ -1,0 +1,30 @@
+@token = 60dff95b-e631-46fc-850e-735cfedd0732
+
+### Login
+POST http://localhost:8080/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "admin"
+}
+
+### Lista plików
+GET http://localhost:8080/api/files/list?path=testy
+Authorization: Bearer {{token}}
+
+### Upload pliku
+POST http://localhost:8080/api/files/upload?path=testy
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="file"; filename="plik.txt"
+Content-Type: text/plain
+
+< /Users/sqstudio/Desktop/plik.txt
+--WebAppBoundary--
+
+### Usuń plik
+DELETE http://localhost:8080/api/files/delete?path=testy/plik.txt
+Authorization: Bearer {{token}}

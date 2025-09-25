@@ -1,7 +1,6 @@
 package com.nas_backend.controller;
 
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -9,14 +8,13 @@ import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
+import com.nas_backend.service.AuthService;
 import com.nas_backend.service.FileService;
 import com.nas_backend.model.FileInfo;
 
@@ -25,65 +23,74 @@ import com.nas_backend.model.FileInfo;
 public class FileController {
 
     private final FileService fileService;
+    private final AuthService authService; // Injecting authService to validate tokens
 
-    public FileController(FileService fileService) {
+    public FileController(FileService fileService, AuthService authService) {
         this.fileService = fileService;
+        this.authService = authService;
     }
 
-    @GetMapping
-    public ResponseEntity<?> listFiles(@RequestParam(name = "path", required = false, defaultValue = "") String path) {
+    private String requireValidUser(String authHeader) {
+        String token = authService.extractToken(authHeader);
+        String username = authService.getUsernameFromToken(token);
+        if (username == null) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Invalid or missing token");
+        }
+    return username;
+}
+
+    @GetMapping("/list")
+    public ResponseEntity<?> listFiles(@RequestHeader(name = "Authorization", required = false) String authHeader,
+            @RequestParam(name = "path", required = false, defaultValue = "") String path) {
+        String username = requireValidUser(authHeader);
+
         try {
-            List<FileInfo> files = fileService.listFiles(path);
+            // User folder becomes root path
+            String userPath = username + "/" + path;
+            List<FileInfo> files = fileService.listFiles(userPath);
             return ResponseEntity.ok(files);
         } catch (SecurityException e) {
-            Map<String, String> error = new HashMap<>();
-            error.put("error", "Access denied: path outside storage");
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Access denied: path outside storage"));
         } catch (IOException e) {
-            Map<String, String> error = new HashMap<>();
-            error.put("error", "Internal server error");
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Internal server error"));
         }
     }
 
     @GetMapping("/download")
-    public ResponseEntity<?> download(@RequestParam(name = "path", required = true) String path) {
+    public ResponseEntity<?> download(@RequestHeader(name = "Authorization", required = false) String authHeader, @RequestParam(name = "path") String path) {
+        String username = requireValidUser(authHeader);
+
         try {
-            Resource resource = fileService.getResource(path);
-            String filename = resource instanceof FileSystemResource 
-                                ? ((FileSystemResource) resource).getFile().getName() 
-                                : path.substring(path.lastIndexOf('/') + 1) + ".zip";
+            String userPath = username + "/" + path;
+            Resource resource = fileService.getResource(userPath);
+            String filename = resource instanceof FileSystemResource
+                    ? ((FileSystemResource) resource).getFile().getName()
+                    : path.substring(path.lastIndexOf('/') + 1);
 
-            return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+            return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                    .contentType(MediaType.APPLICATION_OCTET_STREAM)
                     .body(resource);
-
         } catch (SecurityException e) {
-            Map<String, String> error = new HashMap<>();
-            error.put("error", "Access denied: path outside storage");
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Access denied: path outside storage"));
         } catch (IOException e) {
-            Map<String, String> error = new HashMap<>();
-            error.put("error", "File or folder not found / internal error");
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "File or folder not found / internal error"));
         }
     }
 
     @PostMapping("/upload")
-    public ResponseEntity<?> upload(@RequestParam(name = "path") String path, @RequestParam(name = "file") MultipartFile file) {
+    public ResponseEntity<?> upload(@RequestHeader(name = "Authorization", required = false) String authHeader,
+            @RequestParam(name = "path") String path,
+            @RequestParam(name = "file") MultipartFile file) {
+        String username = requireValidUser(authHeader);
+
         try {
-            fileService.uploadFile(path, file);
-            Map<String, String> response = new HashMap<>();
-            response.put("message", "File uploaded successfully");
-            return ResponseEntity.ok(response);
+            String userPath = username + "/" + path;
+            fileService.uploadFile(userPath, file);
+            return ResponseEntity.ok(Map.of("message", "File uploaded successfully"));
         } catch (SecurityException e) {
-            Map<String, String> error = new HashMap<>();
-            error.put("error", "Access denied: path outside storage");
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Access denied: path outside storage"));
         } catch (IOException e) {
-            Map<String, String> error = new HashMap<>();
-            error.put("error", "Upload failed: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Upload failed: " + e.getMessage()));
         }
     }
 }
