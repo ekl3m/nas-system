@@ -1,7 +1,6 @@
 package com.nas_backend.service;
 
 import com.nas_backend.model.FileInfo;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.stereotype.Service;
@@ -22,8 +21,15 @@ import java.util.zip.ZipOutputStream;
 @Service
 public class FileService {
 
-    @Value("${nas.storage.path}")
-    private String storagePath;
+    private final AppConfigService configService;
+
+    public FileService(AppConfigService appConfigService) {
+        this.configService = appConfigService;
+    }
+
+    private String getStoragePath() {
+        return configService.getConfig().getStoragePath();
+    }
 
     public List<FileInfo> listFiles(String path) throws IOException {
         List<FileInfo> files = new ArrayList<>();
@@ -31,8 +37,8 @@ public class FileService {
 
         if (folder.exists() && folder.isDirectory()) {
             File parent = folder.getParentFile();
-            String parentPath = (parent != null && parent.getCanonicalPath().startsWith(new File(storagePath).getCanonicalPath()))
-                                ? new File(storagePath).toURI().relativize(parent.toURI()).getPath()
+            String parentPath = (parent != null && parent.getCanonicalPath().startsWith(new File(getStoragePath()).getCanonicalPath()))
+                                ? new File(getStoragePath()).toURI().relativize(parent.toURI()).getPath()
                                 : null;
 
             for (File file : folder.listFiles()) {
@@ -119,8 +125,8 @@ public class FileService {
     }
 
     private File resolvePath(String relativePath) throws IOException {
-        File root = new File(storagePath).getCanonicalFile();
-        File file = new File(storagePath, relativePath != null ? relativePath : "").getCanonicalFile();
+        File root = new File(getStoragePath()).getCanonicalFile();
+        File file = new File(getStoragePath(), relativePath != null ? relativePath : "").getCanonicalFile();
 
         if (!file.getPath().startsWith(root.getPath())) {
             throw new SecurityException("Access denied: path outside storage");

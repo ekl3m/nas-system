@@ -1,6 +1,8 @@
 package com.nas_backend.controller;
 
 import com.nas_backend.service.AuthService;
+
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
@@ -19,6 +21,14 @@ public class AuthController {
     public Map<String, String> login(@RequestBody AuthRequest authRequest) {
         String token = authService.login(authRequest.username(), authRequest.password());
         return Map.of("token", token);
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(
+            @RequestHeader(name = "Authorization", required = false) String authHeader) {
+        String token = authService.extractToken(authHeader);
+        authService.logout(token);
+        return ResponseEntity.noContent().build();
     }
 
     // Login DTO

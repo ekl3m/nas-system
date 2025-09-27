@@ -17,6 +17,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.nas_backend.service.AuthService;
 import com.nas_backend.service.FileService;
 import com.nas_backend.model.FileInfo;
+import com.nas_backend.model.UserConfig;
 
 @RestController
 @RequestMapping("/api/files")
@@ -32,12 +33,13 @@ public class FileController {
 
     private String requireValidUser(String authHeader) {
         String token = authService.extractToken(authHeader);
-        String username = authService.getUsernameFromToken(token);
-        if (username == null) {
+        UserConfig user = authService.getUserFromToken(token);
+        if (user == null) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Invalid or missing token");
         }
-    return username;
-}
+        
+        return user.getUsername();
+    }
 
     @GetMapping("/list")
     public ResponseEntity<?> listFiles(@RequestHeader(name = "Authorization", required = false) String authHeader,

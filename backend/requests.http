@@ -1,4 +1,4 @@
-@token = c802c443-e0a3-40d4-9150-fcaca35313cb
+@token = 839bbd31-ff1e-46c9-a7d3-b377cbd93117
 
 ### Login
 POST http://localhost:8080/api/auth/login
@@ -27,4 +27,8 @@ Content-Type: text/plain
 
 ### Usuń plik
 DELETE http://localhost:8080/api/files/delete?path=testy/plik.txt
+Authorization: Bearer {{token}}
+
+### Logout
+POST http://localhost:8080/api/auth/logout
 Authorization: Bearer {{token}}
