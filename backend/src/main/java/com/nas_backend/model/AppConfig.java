@@ -1,39 +1,47 @@
 package com.nas_backend.model;
 
 public class AppConfig {
-    private String storagePath;
-    private long tokenTTL;
-    private int maxUploadSizeMB;
+    private StorageConfig storage;
+    private BackupConfig backup;
+    private ServerConfig server;
+    private TrashCanConfig trashCan;
 
+    // Empty constructor is required by Jackson
     public AppConfig() {
-        // Empty constructor is required by Jackson
-    } 
-
-    // Getters:
-
-    public String getStoragePath() {
-        return storagePath;
     }
 
-    public long getTokenTTL() {
-        return tokenTTL;
+    // Getters
+    public StorageConfig getStorage() {
+        return storage;
     }
 
-    public int getMaxUploadSizeMB() {
-        return maxUploadSizeMB;
+    public BackupConfig getBackup() {
+        return backup;
     }
 
-    // Setters:
-
-    public void setStoragePath(String storagePath) {
-        this.storagePath = storagePath;
+    public ServerConfig getServer() {
+        return server;
     }
 
-    public void setTokenTTL(long tokenTTL) {
-        this.tokenTTL = tokenTTL;
+    public TrashCanConfig getTrashCan() {
+        return trashCan;
     }
 
-    public void setMaxUploadSizeMB(int maxUploadSizeMB) {
-        this.maxUploadSizeMB = maxUploadSizeMB;
+    // Setters
+
+    public void setStorage(StorageConfig storage) {
+        this.storage = storage;
+    }
+
+    public void setBackup(BackupConfig backup) {
+        this.backup = backup;
+    }
+
+    public void setServer(ServerConfig server) {
+        this.server = server;
+    }
+
+    public void setTrashCan(TrashCanConfig trashCan) {
+        this.trashCan = trashCan;
     }
 }

@@ -5,8 +5,8 @@
         "role": "ADMIN"
     },
     {
-        "username": "eryk",
-        "password": "eryk123",
+        "username": "user",
+        "password": "user",
         "role": "USER"
     }
 ]

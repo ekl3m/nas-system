@@ -1,0 +1,31 @@
+{
+    "server": {
+        "hostname": "RaspberryPi-NAS",
+        "enableHTTPS": false,
+        "tokenTTL": 3600,
+        "maxUploadSizeMB": 5000,
+        "logLevel": "DEBUG",
+        "maxConcurrentUploads": 5
+    },
+    "storage": {
+        "paths": [
+            "/YOUR/FILE/PATH/1",
+            "/YOUR/FILE/PATH/2"
+        ],
+        "quotaGB": 1000
+    },
+    "backup": {
+        "enabled": true,
+        "paths": [
+            "/YOUR/BACKUP/FILE/PATH/1",
+            "/YOUR/BACKUP/FILE/PATH/2"
+        ],
+        "quotaGB": 1000
+    },
+    "trashCan": {
+        "enabled": true,
+        "path": "/YOUR/TRASHCAN/FILE/PATH",
+        "quotaGB": 50,
+        "retentionDays": 30
+    }
+}

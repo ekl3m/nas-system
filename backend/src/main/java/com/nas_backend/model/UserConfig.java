@@ -5,8 +5,8 @@ public class UserConfig {
     private String password;
     private String role;
 
+    // Empty constructor is required by Jackson
     public UserConfig() {
-        // Empty constructor is required by Jackson
     }
 
     public UserConfig(String username, String password, String role){

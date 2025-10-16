@@ -37,7 +37,7 @@ Thumbs.db
 *.tmp
 *.~*
 
-# === PYTHON (jeśli coś testowo dodajesz) ===
+# === PYTHON ===
 *.pyc
 __pycache__/
 
@@ -57,3 +57,7 @@ __pycache__/
 *.log
 *.pid
 *.out
+
+# === LOCAL CONFIGURATION FILES ===
+/backend/config/
+/backend/data/

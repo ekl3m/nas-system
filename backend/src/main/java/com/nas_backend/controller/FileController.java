@@ -46,16 +46,14 @@ public class FileController {
             @RequestParam(name = "path", required = false, defaultValue = "") String path) {
         String username = requireValidUser(authHeader);
 
-        try {
-            // User folder becomes root path
-            String userPath = username + "/" + path;
-            List<FileInfo> files = fileService.listFiles(userPath);
-            return ResponseEntity.ok(files);
-        } catch (SecurityException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Access denied: path outside storage"));
-        } catch (IOException e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Internal server error"));
+        if (path.startsWith("/")) {
+            path = path.substring(1);
         }
+        String userPath = username + "/" + path;
+
+        List<FileInfo> files = fileService.listFiles(userPath);
+
+        return ResponseEntity.ok(files);
     }
 
     @GetMapping("/download")
