@@ -19,6 +19,7 @@ import java.nio.file.FileStore;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -106,6 +107,7 @@ public class FileService {
     }
 
     public void deleteResource(String logicalPath) throws IOException {
+        AppConfig config = configService.getConfig();
         logger.warn("Delete request for logical path: {}", logicalPath);
 
         // Step 1: Find the file in index
@@ -114,15 +116,23 @@ public class FileService {
             throw new IOException("File to delete not found in index: " + logicalPath);
         }
 
-        // Step 2: Delete physical file
+        // Step 2: Delete physical file or move it to the trashcan
         File file = new File(metadata.getPhysicalPath());
         if (file.exists()) {
-            if (metadata.isDirectory()) {
-                deleteDirectoryRecursively(file);
+            if (config.getTrashcan().isEnabled()) {
+                // Trashcan
+                String newPath = moveResourceToTrash(metadata);
+                logger.info("Resource moved to trash at physical path: {}", newPath);
             } else {
-                Files.delete(file.toPath());
+                // Permanent deletion
+                logger.warn("Trash can is disabled. Permanently deleting resource.");
+                if (metadata.isDirectory()) {
+                    deleteDirectoryRecursively(file);
+                } else {
+                    Files.delete(file.toPath());
+                }
+                logger.info("Physical resource deleted from: {}", metadata.getPhysicalPath());
             }
-            logger.info("Physical file deleted from: {}", metadata.getPhysicalPath());
         } else {
             logger.warn("Physical file was already deleted, but existed in index: {}", metadata.getPhysicalPath());
         }
@@ -172,6 +182,48 @@ public class FileService {
             throw new IOException("Not enough space on any storage device.");
         }
         return bestPath;
+    }
+
+    private String moveResourceToTrash(FileMetadata metadata) throws IOException {
+        AppConfig config = configService.getConfig();
+        String trashPathString = config.getTrashcan().getPath();
+
+        // Make sure that trashcan directory exists
+        Path trashPath = Paths.get(trashPathString);
+        Files.createDirectories(trashPath);
+
+        Path sourcePath = Paths.get(metadata.getPhysicalPath());
+        String originalFileName = sourcePath.getFileName().toString();
+        Path destinationPath = trashPath.resolve(originalFileName);
+
+        // Handling repeating file names
+        if (Files.exists(destinationPath)) {
+            String baseName;
+            String extension;
+            int dotIndex = originalFileName.lastIndexOf('.');
+
+            if (dotIndex > 0) {
+                baseName = originalFileName.substring(0, dotIndex);
+                extension = originalFileName.substring(dotIndex);
+            } else {
+                baseName = originalFileName;
+                extension = "";
+            }
+
+            int count = 1;
+            // Look for the first free name, for example file(1).txt, file(2).txt ...
+            do {
+                String newName = baseName + "(" + count + ")" + extension;
+                destinationPath = trashPath.resolve(newName);
+                count++;
+            } while (Files.exists(destinationPath));
+        }
+
+        // Move the file
+        Files.move(sourcePath, destinationPath, StandardCopyOption.ATOMIC_MOVE);
+
+        // Return new physical path
+        return destinationPath.toString();
     }
 
     // Metadata to FileInfo (DTO) mapper

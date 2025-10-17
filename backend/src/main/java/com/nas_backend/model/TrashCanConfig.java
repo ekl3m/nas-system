@@ -1,12 +1,12 @@
 package com.nas_backend.model;
 
-public class TrashCanConfig {
+public class TrashcanConfig {
     private boolean enabled;
     private String path;
     private int quotaGB;
     private int retentionDays;
 
-    public TrashCanConfig() {
+    public TrashcanConfig() {
     }
 
     // Getters

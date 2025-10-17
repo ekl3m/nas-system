@@ -22,7 +22,7 @@
         ],
         "quotaGB": 1000
     },
-    "trashCan": {
+    "trashcan": {
         "enabled": true,
         "path": "/YOUR/TRASHCAN/FILE/PATH",
         "quotaGB": 50,

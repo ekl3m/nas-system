@@ -11,7 +11,6 @@ public class NasBackendApplication {
 
 	public static void main(String[] args) {
 		System.setProperty("APP_ROOT_PATH", getAppRootPath());
-
 		SpringApplication.run(NasBackendApplication.class, args);
 	}
 
