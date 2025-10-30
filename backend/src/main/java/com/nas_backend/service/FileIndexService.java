@@ -1,11 +1,8 @@
 package com.nas_backend.service;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.nas_backend.model.FileMetadata;
+import com.nas_backend.model.FileNode;
+import com.nas_backend.repository.FileNodeRepository;
 import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -15,148 +12,129 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 @Service
 public class FileIndexService {
     private static final Logger logger = LoggerFactory.getLogger(FileIndexService.class);
-
     private static final String DATA_DIR_NAME = "data";
-    private static final String INDEX_FILE_NAME = "index.json";
 
-    private final String indexFilePath;
-    private Map<String, FileMetadata> fileIndex = new ConcurrentHashMap<>();
-    private final ObjectMapper objectMapper;
-    private final AppConfigService configService; // Needed for scanning
+    private final FileNodeRepository fileNodeRepository;
+    private final AppConfigService configService;
 
-    public FileIndexService(AppConfigService appConfigService) {
+    public FileIndexService(AppConfigService appConfigService, FileNodeRepository fileNodeRepository) {
         this.configService = appConfigService;
-        this.objectMapper = new ObjectMapper();
-        this.objectMapper.registerModule(new JavaTimeModule());
-
-        String rootPath = System.getProperty("APP_ROOT_PATH");
-        this.indexFilePath = Paths.get(rootPath, DATA_DIR_NAME, INDEX_FILE_NAME).toString();
+        this.fileNodeRepository = fileNodeRepository;
     }
 
+    // If file node DB does not exist, run a backup search
     @PostConstruct
     private void loadIndexOnStartup() {
-        File indexFile = new File(this.indexFilePath);
-        boolean shouldScan = true;
+        String rootPath = System.getProperty("APP_ROOT_PATH");
+        String dbPath = Paths.get(rootPath, DATA_DIR_NAME, "nas.db").toString();
+        File dbFile = new File(dbPath);
 
-        if (indexFile.exists() && indexFile.length() > 0) {
-            logger.info("Found existing index file at: {}", this.indexFilePath);
-            try {
-                fileIndex = objectMapper.readValue(indexFile,
-                        new TypeReference<ConcurrentHashMap<String, FileMetadata>>() {
-                        });
-                logger.info("File index loaded successfully. Found {} entries.", fileIndex.size());
-                if (!fileIndex.isEmpty()) {
-                    shouldScan = false;
-                }
-            } catch (IOException e) {
-                logger.error("Index file is corrupted. Rebuilding by scanning. Error: {}", e.getMessage());
-            }
-        }
-
-        if (shouldScan) {
-            logger.warn("Starting a full scan of storage directories to build/rebuild the index.");
-            fileIndex = new ConcurrentHashMap<>();
-            scanAndBuildIndex();
-        }
-    }
-
-    private void scanAndBuildIndex() {
-        List<String> storagePaths = configService.getConfig().getStorage().getPaths();
-        if (storagePaths == null || storagePaths.isEmpty()) {
-            logger.error("Cannot scan storage, no storage paths configured in config.json!");
+        if (dbFile.exists() && dbFile.length() > 0) {
+            // Scenario A: File node DB exists
+            logger.info("Database found at {}. Starting application.", dbPath);
+            logger.info("Found {} existing nodes in database.", fileNodeRepository.count());
             return;
         }
 
-        logger.info("Scanning storage paths: {}", storagePaths);
-        for (String rootPathStr : storagePaths) {
-            Path rootPath = Paths.get(rootPathStr);
-            if (Files.notExists(rootPath))
-                continue;
+        // Scenario B: File node DB does not exist, look for a backup to restore it from
+        logger.warn("Main database file not found or is empty! Attempting to restore from backup...");
 
-            try (Stream<Path> stream = Files.walk(rootPath)) {
-                stream.forEach(path -> {
-                    File file = path.toFile();
-                    if (file.isHidden() || path.equals(rootPath)) {
-                        return; // Ignore hidden files/dirs and the root dir itself
-                    }
+        if (restoreFromBackup()) {
+            logger.info("Successfully restored database from backup. Starting application.");
+            logger.info("Found {} nodes in restored database.", fileNodeRepository.count());
+        } else {
+            // Scenario C: Neither file node DB nor backup files were found. What a pity.
+            logger.error("FATAL: No database file and no backups found. Starting with a new, empty database. All logical file structures are lost.");
+        }
+    }
 
-                    try {
-                        String physicalPath = file.getCanonicalPath();
-                        String logicalPath = physicalPath
-                                .substring(new File(rootPathStr).getCanonicalPath().length() + 1)
-                                .replace(File.separator, "/");
+    private boolean restoreFromBackup() {
+        List<String> storagePaths = configService.getConfig().getStorage().getPaths();
+        if (storagePaths == null || storagePaths.isEmpty()) {
+            return false;
+        }
 
-                        BasicFileAttributes attrs = Files.readAttributes(path, BasicFileAttributes.class);
-                        FileMetadata metadata = new FileMetadata(
-                                logicalPath, physicalPath, attrs.size(),
-                                attrs.creationTime().toInstant(), attrs.lastModifiedTime().toInstant(),
-                                attrs.isDirectory());
-                        fileIndex.put(logicalPath, metadata);
+        String rootPath = System.getProperty("APP_ROOT_PATH");
+        Path destination = Paths.get(rootPath, DATA_DIR_NAME, "nas.db");
 
-                    } catch (IOException e) {
-                        logger.error("Failed to process path during scan: {}", path, e);
-                    }
-                });
+        for (String drive : storagePaths) {
+            Path backupPath = Paths.get(drive, ".system_backup", "nas.db.backup");
+            if (Files.exists(backupPath)) {
+                try {
+                    logger.warn("Found valid backup at {}. Copying to main DB path...", backupPath);
+                    // Copy file node DB backup to data folder
+                    Files.copy(backupPath, destination);
+                    return true;
+                } catch (IOException e) {
+                    logger.error("Failed to copy backup from {}", backupPath, e);
+                }
+            }
+        }
+        return false;
+    }
+
+    private synchronized void backupDatabase() {
+        String rootPath = System.getProperty("APP_ROOT_PATH");
+        Path source = Paths.get(rootPath, DATA_DIR_NAME, "nas.db");
+
+        if (!Files.exists(source))
+            return; // Nothing to backup
+
+        List<String> storagePaths = configService.getConfig().getStorage().getPaths();
+        if (storagePaths == null)
+            return;
+
+        logger.info("Performing database backup to all storage drives...");
+        for (String drive : storagePaths) {
+            try {
+                Path backupDir = Paths.get(drive, ".system_backup");
+                Files.createDirectories(backupDir);
+                Path destination = backupDir.resolve("nas.db.backup");
+
+                // Copy file node DB to storage drive, overwrite old backup
+                Files.copy(source, destination, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             } catch (IOException e) {
-                logger.error("Failed to scan storage path: {}", rootPathStr, e);
+                logger.error("Failed to backup database to drive: {}", drive, e);
             }
         }
-
-        logger.info("Index scan complete. Found {} entries. Saving to file.", fileIndex.size());
-        saveIndexToFile();
     }
 
-    @PreDestroy
-    private void saveIndexOnShutdown() {
-        saveIndexToFile();
+    // Saves or updates one node in file node DB
+    public void addOrUpdateNode(FileNode node) {
+        fileNodeRepository.save(node);
+        backupDatabase();
     }
 
-    private synchronized void saveIndexToFile() {
-        try {
-            File indexFile = new File(this.indexFilePath);
-            File parentDir = indexFile.getParentFile();
-            if (parentDir != null) {
-                parentDir.mkdirs();
-            }
-            objectMapper.writerWithDefaultPrettyPrinter().writeValue(indexFile, fileIndex);
-        } catch (IOException e) {
-            logger.error("CRITICAL: Could not save index file!", e);
+    // Removes a node from file node DB grounding on its logical path
+    public void removeNode(String logicalPath) {
+        // Find a node, if it exists - delete it
+        fileNodeRepository.findByLogicalPath(logicalPath).ifPresent(node -> {
+            fileNodeRepository.delete(node);
+            logger.info("Removed node from index: {}", logicalPath);
+            backupDatabase();
+        });
+    }
+
+    // Get one node's metadata from file node DB
+    public FileNode getNode(String logicalPath) {
+        return fileNodeRepository.findByLogicalPath(logicalPath).orElse(null);
+    }
+
+    // Check whether a node using a given logical path exists
+    public boolean nodeExists(String logicalPath) {
+        return fileNodeRepository.existsByLogicalPath(logicalPath);
+    }
+
+    // List all files/directories located directly inside a given directory
+    public List<FileNode> listFiles(String directoryLogicalPath) {
+        if (directoryLogicalPath == null || directoryLogicalPath.isEmpty() || directoryLogicalPath.equals("/")) {
+            directoryLogicalPath = "/";
         }
-    }
-
-    public void addOrUpdateFile(FileMetadata metadata) {
-        fileIndex.put(metadata.getLogicalPath(), metadata);
-        saveIndexToFile();
-    }
-
-    public void removeFile(String logicalPath) {
-        fileIndex.remove(logicalPath);
-        saveIndexToFile();
-    }
-
-    public FileMetadata getMetadata(String logicalPath) {
-        return fileIndex.get(logicalPath);
-    }
-
-    public List<FileMetadata> listFiles(String directoryLogicalPath) {
-        if (!directoryLogicalPath.endsWith("/") && !directoryLogicalPath.isEmpty()) {
-            directoryLogicalPath += "/";
-        }
-        final String finalPath = directoryLogicalPath;
-        return fileIndex.keySet().stream()
-                .filter(path -> path.startsWith(finalPath))
-                .filter(path -> !path.substring(finalPath.length()).contains("/"))
-                .map(fileIndex::get)
-                .collect(Collectors.toList());
+        return fileNodeRepository.findByParentPath(directoryLogicalPath);
     }
 }

@@ -1,4 +1,4 @@
-@token = 77912027-f355-4f0f-a166-33330c828cf0
+@token = 3992722e-598b-4140-9fcd-fa0f6409bdba
 
 ### Login
 POST http://localhost:8080/api/auth/login
@@ -11,6 +11,10 @@ Content-Type: application/json
 
 ### Lista plików
 GET http://localhost:8080/api/files/list?path=testy
+Authorization: Bearer {{token}}
+
+### Lista plików w koszu
+GET http://localhost:8080/api/files/list?path=trash
 Authorization: Bearer {{token}}
 
 ### Upload pliku

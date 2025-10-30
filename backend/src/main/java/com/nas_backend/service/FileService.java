@@ -2,13 +2,15 @@ package com.nas_backend.service;
 
 import com.nas_backend.model.AppConfig;
 import com.nas_backend.model.FileInfo;
-import com.nas_backend.model.FileMetadata;
+import com.nas_backend.model.FileNode;
+import com.nas_backend.repository.FileNodeRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.ByteArrayOutputStream;
@@ -19,9 +21,9 @@ import java.nio.file.FileStore;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -33,265 +35,308 @@ public class FileService {
 
     private final AppConfigService configService;
     private final FileIndexService fileIndexService;
+    private final FileNodeRepository fileNodeRepository;
 
-    public FileService(AppConfigService appConfigService, FileIndexService fileIndexService) {
+    public FileService(AppConfigService appConfigService, FileIndexService fileIndexService, FileNodeRepository fileNodeRepository) {
         this.configService = appConfigService;
         this.fileIndexService = fileIndexService;
+        this.fileNodeRepository = fileNodeRepository;
     }
 
-    public void uploadFile(String logicalPath, MultipartFile file, boolean overwrite) throws IOException {
-        logger.info("Upload request for '{}' in logical path '{}'", file.getOriginalFilename(), logicalPath);
+    @Transactional
+    public void uploadFile(String logicalParentPath, MultipartFile file, boolean overwrite) throws IOException {
+        logger.info("Upload request for '{}' in logical path '{}'", file.getOriginalFilename(), logicalParentPath);
         AppConfig config = configService.getConfig();
         long fileSize = file.getSize();
+        String originalFileName = file.getOriginalFilename();
 
-        // Check file size limit
+        // Size validation
         if (fileSize > (long) config.getServer().getMaxUploadSizeMB() * 1024 * 1024) {
             throw new IOException("File size exceeds the maximum upload limit.");
         }
 
-        // Step 1: Find best storage path to save the file
-        String bestStoragePath = findBestStoragePath(fileSize);
+        // Build complete logical path
+        String finalLogicalPath = Paths.get(logicalParentPath, originalFileName).toString().replace("\\", "/");
 
-        // Step 2: Build full logical and physical file path
-        Path physicalDirectory = Paths.get(bestStoragePath, logicalPath);
-        Files.createDirectories(physicalDirectory); // Make sure that target folder exists
+        // Verify whether a file node using this logical path already exists
+        FileNode existingNode = fileIndexService.getNode(finalLogicalPath);
 
-        File destinationFile = physicalDirectory.resolve(file.getOriginalFilename()).toFile();
-        String finalLogicalPath = Paths.get(logicalPath, file.getOriginalFilename()).toString().replace("\\", "/");
-
-        // Step 3: Check in index whether the file already exists
-        if (fileIndexService.getMetadata(finalLogicalPath) != null && !overwrite) {
-            throw new IOException("File already exists in the index. Set overwrite=true to replace it.");
+        // Validate
+        if (existingNode != null && !overwrite) {
+            // File using this logical path exists and user did not agree to overwrite it
+            throw new IOException(
+                    "A file with this name already exists at this location. Set overwrite=true to replace it.");
         }
 
-        // Step 4: Save the file
-        file.transferTo(destinationFile);
-        logger.info("File saved successfully to physical path: {}", destinationFile.getAbsolutePath());
+        // Find best storage path and save the file
+        String bestStoragePath = findBestStoragePath(fileSize);
+        String userName = logicalParentPath.split("/")[0];
+        String uniquePhysicalName = UUID.randomUUID().toString() + "-" + originalFileName;
+        Path physicalPath = Paths.get(bestStoragePath, userName, uniquePhysicalName);
 
-        // Step 5: Create metadata and append to index
-        Instant now = Instant.now();
-        FileMetadata metadata = new FileMetadata(
-                finalLogicalPath,
-                destinationFile.getAbsolutePath(),
-                fileSize,
-                now, // createdAt
-                now, // modifiedAt
-                false // isDirectory
-        );
-        fileIndexService.addOrUpdateFile(metadata);
-        logger.info("File index updated for logical path: {}", finalLogicalPath);
+        Files.createDirectories(physicalPath.getParent());
+        file.transferTo(physicalPath);
+        logger.info("File saved successfully to new physical path: {}", physicalPath);
+
+        // Prepare file node DB entry (update old or create new)
+        FileNode nodeToSave;
+
+        if (existingNode != null) {
+            // OVERWRITE MODE
+            nodeToSave = existingNode;
+            logger.warn("Overwrite mode: Found existing node for: {}", finalLogicalPath);
+
+            // Delete old physical file as an attempt to spare it from becoming an orphan
+            logger.info("Attempting to delete old physical file at: {}", existingNode.getPhysicalPath());
+            File oldPhysicalFile = new File(existingNode.getPhysicalPath());
+            if (oldPhysicalFile.exists()) {
+                try {
+                    Files.delete(oldPhysicalFile.toPath());
+                    logger.info("Deleted old physical file successfully.");
+                } catch (IOException e) {
+                    logger.warn("Could not delete old physical file: {}", oldPhysicalFile.getAbsolutePath(), e);
+                }
+            }
+        } else {
+            // NEW FILE MODE, create an entry
+            nodeToSave = new FileNode();
+            nodeToSave.setCreatedAt(Instant.now());
+        }
+
+        // Set or update all fields
+        nodeToSave.setLogicalPath(finalLogicalPath);
+        nodeToSave.setParentPath(logicalParentPath);
+        nodeToSave.setPhysicalPath(physicalPath.toString()); // New file physical path
+        nodeToSave.setFileName(originalFileName);
+        nodeToSave.setDirectory(false);
+        nodeToSave.setSize(fileSize);
+        nodeToSave.setModifiedAt(Instant.now());
+        nodeToSave.setRestorePath(null); // Must remain null until deletion
+
+        fileIndexService.addOrUpdateNode(nodeToSave);
+        logger.info("File index (DB) updated for logical path: {}", finalLogicalPath);
     }
 
     public Resource getResource(String logicalPath) throws IOException {
         logger.info("Resource request for logical path: {}", logicalPath);
 
-        // Step 1: Ask index about the metadata
-        FileMetadata metadata = fileIndexService.getMetadata(logicalPath);
-        if (metadata == null) {
+        // Ask file node DB about the node
+        FileNode node = fileIndexService.getNode(logicalPath);
+        if (node == null) {
             throw new IOException("File not found in index: " + logicalPath);
         }
 
-        // Step 2: Use physical path from metadata
-        File file = new File(metadata.getPhysicalPath());
-        if (!file.exists()) {
-            logger.error("File inconsistency! Found in index but not on disk: {}", metadata.getPhysicalPath());
-            fileIndexService.removeFile(logicalPath); // Opcjonalnie: auto-naprawa indeksu
-            throw new IOException("File not found on disk, index corrected.");
-        }
-
-        if (metadata.isDirectory()) {
-            return getFolderAsZip(file);
+        // Verify whether it is a file or a directory
+        if (node.isDirectory()) {
+            // It is a directory, zip it and return as a file
+            return getFolderAsZip(logicalPath);
         } else {
+            // It is a file, return it from its physical path
+            File file = new File(node.getPhysicalPath());
+            if (!file.exists()) {
+                logger.error("File inconsistency! Found in DB but not on disk: {}", node.getPhysicalPath());
+                fileIndexService.removeNode(logicalPath);
+                throw new IOException("File not found on disk, index corrected.");
+            }
             return new FileSystemResource(file);
         }
     }
 
+    @Transactional
     public void deleteResource(String logicalPath) throws IOException {
         AppConfig config = configService.getConfig();
         logger.warn("Delete request for logical path: {}", logicalPath);
 
-        // Step 1: Find the file in index
-        FileMetadata metadata = fileIndexService.getMetadata(logicalPath);
-        if (metadata == null) {
-            throw new IOException("File to delete not found in index: " + logicalPath);
+        // Find root node to delete
+        FileNode rootNodeToDelete = fileIndexService.getNode(logicalPath);
+        if (rootNodeToDelete == null) {
+            throw new IOException("Resource to delete not found in index: " + logicalPath);
         }
 
-        // Step 2: Delete physical file or move it to the trashcan
-        File file = new File(metadata.getPhysicalPath());
-        if (file.exists()) {
-            if (config.getTrashcan().isEnabled()) {
-                // Trashcan
-                String newPath = moveResourceToTrash(metadata);
-                logger.info("Resource moved to trash at physical path: {}", newPath);
-            } else {
-                // Permanent deletion
-                logger.warn("Trash can is disabled. Permanently deleting resource.");
-                if (metadata.isDirectory()) {
-                    deleteDirectoryRecursively(file);
-                } else {
-                    Files.delete(file.toPath());
+        // Store original path, so that it remains restorable
+        String originalParentPath = rootNodeToDelete.getParentPath();
+
+        if (config.getTrashcan().isEnabled()) {
+            // Virtual trashcan logic
+            logger.info("Moving resource and its children to virtual trash...");
+            String userName = originalParentPath.split("/")[0]; // "admin"
+            String trashParentPath = userName + "/trash";
+
+            // Create a new base file path in trash e.g. "admin/trash/testy-uuid"
+            String newBaseNameInTrash = rootNodeToDelete.getFileName() + "-"
+                    + UUID.randomUUID().toString().substring(0, 8);
+            String newBasePathInTrash = Paths.get(trashParentPath, newBaseNameInTrash).toString().replace("\\", "/");
+
+            // Find all nodes to move (this single one or a directory and its children)
+            List<FileNode> nodesToMove = fileNodeRepository.findByLogicalPathStartingWith(logicalPath);
+
+            for (FileNode node : nodesToMove) {
+                // Compute a new logical path, sparing the structure e.g. "admin/testy/plik.txt" -> "admin/trash/testy-uuid/plik.txt"
+                String oldSubPath = node.getLogicalPath().substring(logicalPath.length()); // np. "" lub "/plik.txt"
+                String newLogicalPath = newBasePathInTrash + oldSubPath;
+                String newParentPath = new File(newLogicalPath).getParent().replace("\\", "/");
+
+                // Save the origin path
+                if (node.getLogicalPath().equals(logicalPath)) {
+                    node.setRestorePath(originalParentPath);
                 }
-                logger.info("Physical resource deleted from: {}", metadata.getPhysicalPath());
-            }
-        } else {
-            logger.warn("Physical file was already deleted, but existed in index: {}", metadata.getPhysicalPath());
-        }
 
-        // Step 3: Delete file from index
-        fileIndexService.removeFile(logicalPath);
-        logger.info("File removed from index: {}", logicalPath);
+                // "Move" it virtually
+                node.setLogicalPath(newLogicalPath);
+                node.setParentPath(newParentPath);
+                node.setModifiedAt(Instant.now());
+
+                fileIndexService.addOrUpdateNode(node);
+            }
+            logger.info("All {} nodes related to {} virtually moved to new trash path: {}", nodesToMove.size(),
+                    logicalPath, newBasePathInTrash);
+
+        } else {
+            // Permanent deletion logic
+            logger.warn("Trash can is disabled. Permanently deleting resources.");
+            deleteRecursively(logicalPath);
+        }
+    }
+
+    @Transactional
+    public void moveResource(String oldLogicalPath, String newLogicalPath) throws IOException {
+        logger.info("Move/Rename request from '{}' to '{}'", oldLogicalPath, newLogicalPath);
+
+        // Validate
+        FileNode node = fileIndexService.getNode(oldLogicalPath);
+        if (node == null) {
+            throw new IOException("Source resource not found in index: " + oldLogicalPath);
+        }
+        if (fileIndexService.nodeExists(newLogicalPath)) {
+            throw new IOException("Destination logical path already exists: \"" + newLogicalPath + "\"");
+        }
+        
+        // Just replace an entry in file node DB
+        String newParentPath = new File(newLogicalPath).getParent().replace("\\", "/");
+        String newFileName = new File(newLogicalPath).getName();
+        
+        node.setLogicalPath(newLogicalPath);
+        node.setParentPath(newParentPath);
+        node.setFileName(newFileName);
+        node.setModifiedAt(Instant.now());
+
+        fileIndexService.addOrUpdateNode(node);
+
+        // If it was a directory, update its children paths
+        if (node.isDirectory()) {
+            List<FileNode> children = fileNodeRepository.findByLogicalPathStartingWith(oldLogicalPath + "/");
+            for (FileNode child : children) {
+                String oldChildPath = child.getLogicalPath();
+                String newChildPath = oldChildPath.replaceFirst(oldLogicalPath, newLogicalPath);
+                String newChildParentPath = new File(newChildPath).getParent().replace("\\", "/");
+                
+                child.setLogicalPath(newChildPath);
+                child.setParentPath(newChildParentPath);
+                fileIndexService.addOrUpdateNode(child);
+            }
+            logger.info("Updated {} children nodes for renamed folder.", children.size());
+        }
+        
+        logger.info("Resource virtually moved in index. Physical file was NOT touched.");
     }
 
     public List<FileInfo> listFiles(String logicalPath) {
         logger.info("List files request for logical path: {}", logicalPath);
-
-        // Step 1: Step 1: Obtain metadata list from index
-        List<FileMetadata> metadataList = fileIndexService.listFiles(logicalPath);
-
-        // Step 2: Convert (map) metadata to DTO objects (FileInfo) for frontend
-        return metadataList.stream()
+        List<FileNode> nodes = fileIndexService.listFiles(logicalPath);
+        
+        // Map FileNode to FileInfo
+        return nodes.stream()
                 .map(this::toFileInfo)
                 .collect(Collectors.toList());
     }
 
-    // Private helper methods
+    @Transactional
+    protected void deleteRecursively(String logicalPath) throws IOException {
+        List<FileNode> nodesToDelete = fileNodeRepository.findByLogicalPathStartingWith(logicalPath);
+
+        for (FileNode node : nodesToDelete) {
+            // Delete physical file (only if it is a file, directories do not exist physically)
+            if (!node.isDirectory()) {
+                File file = new File(node.getPhysicalPath());
+                if (file.exists()) {
+                    Files.delete(file.toPath());
+                } else {
+                    logger.warn("Tried to delete physical file, but it was already gone: {}", node.getPhysicalPath());
+                }
+            }
+            // Delete file node DB entry
+            fileNodeRepository.delete(node);
+        }
+        logger.info("Permanently deleted {} nodes starting with logical path: {}", nodesToDelete.size(), logicalPath);
+    }
+
+    private Resource getFolderAsZip(String logicalPath) throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try (ZipOutputStream zos = new ZipOutputStream(baos)) {
+
+            // Find all children nodes (files and directories)
+            List<FileNode> children = fileNodeRepository.findByLogicalPathStartingWith(logicalPath + "/");
+
+            for (FileNode node : children) {
+                // Create a relative path inside ZIP file
+                String zipEntryName = node.getLogicalPath().substring(logicalPath.length() + 1);
+
+                if (node.isDirectory()) {
+                    // Scenario A: It is a directory
+                    ZipEntry zipEntry = new ZipEntry(zipEntryName + "/");
+                    zos.putNextEntry(zipEntry);
+                    zos.closeEntry();
+                } else {
+                    // Scenario B: It is a file
+                    File file = new File(node.getPhysicalPath());
+                    if (!file.exists()) continue; // Skip, if file is not physically there
+
+                    try (FileInputStream fis = new FileInputStream(file)) {
+                        ZipEntry zipEntry = new ZipEntry(zipEntryName);
+                        zos.putNextEntry(zipEntry);
+                        byte[] bytes = new byte[1024];
+                        int length;
+                        while ((length = fis.read(bytes)) >= 0) {
+                            zos.write(bytes, 0, length);
+                        }
+                        zos.closeEntry();
+                    }
+                }
+            }
+        }
+        return new ByteArrayResource(baos.toByteArray());
+    }
+
+    // Mapper FileNode -> FileInfo (DTO)
+    private FileInfo toFileInfo(FileNode node) {
+        return new FileInfo(
+                node.getFileName(),
+                node.isDirectory(),
+                node.getSize(),
+                node.getModifiedAt().toString(),
+                node.getParentPath()
+        );
+    }
 
     private String findBestStoragePath(long requiredSpace) throws IOException {
         List<String> paths = configService.getConfig().getStorage().getPaths();
         if (paths.isEmpty())
             throw new IOException("No storage paths configured!");
-
         String bestPath = null;
         long maxFreeSpace = -1;
-
         for (String pathStr : paths) {
             Path path = Paths.get(pathStr);
-            if (Files.notExists(path))
-                Files.createDirectories(path);
-
+            if (Files.notExists(path)) Files.createDirectories(path);
             FileStore store = Files.getFileStore(path);
             long usableSpace = store.getUsableSpace();
-
             if (usableSpace > maxFreeSpace) {
                 maxFreeSpace = usableSpace;
                 bestPath = pathStr;
             }
         }
-
         if (bestPath == null || maxFreeSpace < requiredSpace) {
             throw new IOException("Not enough space on any storage device.");
         }
         return bestPath;
-    }
-
-    private String moveResourceToTrash(FileMetadata metadata) throws IOException {
-        AppConfig config = configService.getConfig();
-        String trashPathString = config.getTrashcan().getPath();
-
-        // Make sure that trashcan directory exists
-        Path trashPath = Paths.get(trashPathString);
-        Files.createDirectories(trashPath);
-
-        Path sourcePath = Paths.get(metadata.getPhysicalPath());
-        String originalFileName = sourcePath.getFileName().toString();
-        Path destinationPath = trashPath.resolve(originalFileName);
-
-        // Handling repeating file names
-        if (Files.exists(destinationPath)) {
-            String baseName;
-            String extension;
-            int dotIndex = originalFileName.lastIndexOf('.');
-
-            if (dotIndex > 0) {
-                baseName = originalFileName.substring(0, dotIndex);
-                extension = originalFileName.substring(dotIndex);
-            } else {
-                baseName = originalFileName;
-                extension = "";
-            }
-
-            int count = 1;
-            // Look for the first free name, for example file(1).txt, file(2).txt ...
-            do {
-                String newName = baseName + "(" + count + ")" + extension;
-                destinationPath = trashPath.resolve(newName);
-                count++;
-            } while (Files.exists(destinationPath));
-        }
-
-        // Move the file
-        Files.move(sourcePath, destinationPath, StandardCopyOption.ATOMIC_MOVE);
-
-        // Return new physical path
-        return destinationPath.toString();
-    }
-
-    // Metadata to FileInfo (DTO) mapper
-    private FileInfo toFileInfo(FileMetadata metadata) {
-        Path logicalPath = Paths.get(metadata.getLogicalPath());
-        String name = logicalPath.getFileName().toString();
-        Path parent = logicalPath.getParent();
-        String parentPath = (parent != null) ? parent.toString().replace("\\", "/") : "";
-
-        return new FileInfo(
-                name,
-                metadata.isDirectory(),
-                metadata.getSize(),
-                metadata.getModifiedAt().toString(),
-                parentPath);
-    }
-
-    private Resource getFolderAsZip(File folder) throws IOException {
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        try (ZipOutputStream zos = new ZipOutputStream(baos)) {
-            zipFileRecursively(folder, folder.getName(), zos);
-        }
-        return new ByteArrayResource(baos.toByteArray());
-    }
-
-    private void zipFileRecursively(File fileToZip, String fileName, ZipOutputStream zos) throws IOException {
-        if (fileToZip.isHidden())
-            return;
-
-        if (fileToZip.isDirectory()) {
-            if (!fileName.endsWith("/"))
-                fileName += "/";
-
-            zos.putNextEntry(new ZipEntry(fileName));
-            zos.closeEntry();
-
-            for (File childFile : fileToZip.listFiles()) {
-                zipFileRecursively(childFile, fileName + childFile.getName(), zos);
-            }
-
-            return;
-        }
-
-        try (FileInputStream fis = new FileInputStream(fileToZip)) {
-            ZipEntry zipEntry = new ZipEntry(fileName);
-            zos.putNextEntry(zipEntry);
-            byte[] bytes = new byte[1024];
-            int length;
-
-            while ((length = fis.read(bytes)) >= 0) {
-                zos.write(bytes, 0, length);
-            }
-        }
-    }
-
-    private void deleteDirectoryRecursively(File dir) throws IOException {
-        File[] entries = dir.listFiles();
-
-        if (entries != null) {
-            for (File entry : entries) {
-                if (entry.isDirectory()) {
-                    deleteDirectoryRecursively(entry);
-                } else {
-                    Files.delete(entry.toPath());
-                }
-            }
-        }
-
-        Files.delete(dir.toPath());
     }
 }

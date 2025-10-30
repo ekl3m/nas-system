@@ -24,7 +24,6 @@
     },
     "trashcan": {
         "enabled": true,
-        "path": "/YOUR/TRASHCAN/FILE/PATH",
         "quotaGB": 50,
         "retentionDays": 30
     }

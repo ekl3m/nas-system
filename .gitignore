@@ -17,7 +17,7 @@ Thumbs.db
 /backend/.settings/
 /backend/HELP.md
 
-# IntelliJ IDEA
+# === IntelliJ IDEA ===
 *.iml
 .idea/
 
@@ -41,8 +41,10 @@ Thumbs.db
 *.pyc
 __pycache__/
 
-# === BACKUP / DANE / ZRZUTY ===
-/dane/
+# === BACKUP / DATA / DUMP ===
+/backend/data/
+/backend/logs/
+/data/
 /backup/
 /storage/
 *.zip
@@ -51,7 +53,7 @@ __pycache__/
 # === VS CODE ===
 .vscode/
 
-# === LOGI / BAZY TESTOWE ===
+# === LOGS / TEST DBs ===
 *.db
 *.sqlite
 *.log
@@ -60,4 +62,3 @@ __pycache__/
 
 # === LOCAL CONFIGURATION FILES ===
 /backend/config/
-/backend/data/
