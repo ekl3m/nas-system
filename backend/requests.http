@@ -1,4 +1,4 @@
-@token = 3992722e-598b-4140-9fcd-fa0f6409bdba
+@token = 3fce0564-88a2-4f46-8bf0-646641d4d2a2
 
 ### Login
 POST http://localhost:8080/api/auth/login
@@ -36,3 +36,48 @@ Authorization: Bearer {{token}}
 ### Logout
 POST http://localhost:8080/api/auth/logout
 Authorization: Bearer {{token}}
+
+#########################
+
+# RASPBERRY TESTS
+
+#########################
+
+
+### Login
+POST http://192.168.1.213:8080/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "admin"
+}
+
+### Lista plików
+GET http://192.168.1.213:8080/api/files/list?path=testy
+Authorization: Bearer {{token}}
+
+### Lista plików w koszu
+GET http://192.168.1.213:8080/api/files/list?path=trash
+Authorization: Bearer {{token}}
+
+### Upload pliku
+POST http://192.168.1.213:8080/api/files/upload?path=testy
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="file"; filename="plik.txt"
+Content-Type: text/plain
+
+< /Users/sqstudio/Desktop/plik.txt
+--WebAppBoundary--
+
+### Usuń plik
+DELETE http://192.168.1.213:8080/api/files/delete?path=testy/plik.txt
+Authorization: Bearer {{token}}
+
+### Logout
+POST http://192.168.1.213:8080/api/auth/logout
+Authorization: Bearer {{token}}
+

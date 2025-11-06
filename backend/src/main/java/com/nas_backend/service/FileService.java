@@ -46,6 +46,10 @@ public class FileService {
     @Transactional
     public void uploadFile(String logicalParentPath, MultipartFile file, boolean overwrite) throws IOException {
         logger.info("Upload request for '{}' in logical path '{}'", file.getOriginalFilename(), logicalParentPath);
+
+        // Make sure that parent path exists in file node database
+        createVirtualPath(logicalParentPath);
+
         AppConfig config = configService.getConfig();
         long fileSize = file.getSize();
         String originalFileName = file.getOriginalFilename();
@@ -61,11 +65,10 @@ public class FileService {
         // Verify whether a file node using this logical path already exists
         FileNode existingNode = fileIndexService.getNode(finalLogicalPath);
 
-        // Validate
+        // Overwrite validation
         if (existingNode != null && !overwrite) {
             // File using this logical path exists and user did not agree to overwrite it
-            throw new IOException(
-                    "A file with this name already exists at this location. Set overwrite=true to replace it.");
+            throw new IOException("A file with this name already exists at this location. Set overwrite=true to replace it.");
         }
 
         // Find best storage path and save the file
@@ -248,6 +251,39 @@ public class FileService {
         return nodes.stream()
                 .map(this::toFileInfo)
                 .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public void createVirtualPath(String logicalPath) {
+        // Check whether this directory exists in file node database
+        if (fileNodeRepository.existsByLogicalPath(logicalPath)) {
+            return; // Exists, job done
+        }
+
+        // Stop condition for recurrency. If main user folder is reached, return
+        Path path = Paths.get(logicalPath);
+        if (path.getNameCount() <= 1) {
+            return;
+        }
+
+        // Parent folder does not exist, it needs to be created
+        String parentPathStr = path.getParent().toString().replace("\\", "/");
+        createVirtualPath(parentPathStr); // <--- Recurrency
+
+        logger.info("Auto-creating virtual folder in DB: {}", logicalPath);
+
+        FileNode folderNode = new FileNode();
+        folderNode.setLogicalPath(logicalPath);
+        folderNode.setParentPath(parentPathStr);
+        folderNode.setFileName(path.getFileName().toString());
+        folderNode.setDirectory(true);
+        folderNode.setPhysicalPath("virtual"); // Directories do not have physical path
+        folderNode.setSize(0);
+        folderNode.setCreatedAt(Instant.now());
+        folderNode.setModifiedAt(Instant.now());
+        folderNode.setRestorePath(null);
+
+        fileIndexService.addOrUpdateNode(folderNode);
     }
 
     @Transactional

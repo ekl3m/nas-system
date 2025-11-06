@@ -1,6 +1,7 @@
 package com.nas_backend.controller;
 
 import java.io.IOException;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 
@@ -26,6 +27,11 @@ public class FileController {
     private final FileService fileService;
     private final AuthService authService; // Injecting authService to validate tokens
 
+    // DTO Records
+
+    public record CreateFolderRequest(String logicalPath) {
+    }
+
     public FileController(FileService fileService, AuthService authService) {
         this.fileService = fileService;
         this.authService = authService;
@@ -45,13 +51,20 @@ public class FileController {
     public ResponseEntity<?> listFiles(@RequestHeader(name = "Authorization", required = false) String authHeader,
             @RequestParam(name = "path", required = false, defaultValue = "") String path) {
         String username = requireValidUser(authHeader);
+        String finalUserPath;
 
-        if (path.startsWith("/")) {
-            path = path.substring(1);
+        if (path == null || path.isEmpty() || path.equals("/")) {
+            // If user asks for "root", return him his own folder e.g. "admin"
+            finalUserPath = username;
+        } else {
+            // If user asks for a subfolder, build a complete path
+            if (path.startsWith("/")) {
+                path = path.substring(1);
+            }
+            finalUserPath = Paths.get(username, path).toString().replace("\\", "/");
         }
-        String userPath = username + "/" + path;
 
-        List<FileInfo> files = fileService.listFiles(userPath);
+        List<FileInfo> files = fileService.listFiles(finalUserPath);
 
         return ResponseEntity.ok(files);
     }
@@ -108,6 +121,22 @@ public class FileController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Access denied: path outside storage"));
         } catch (IOException e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Delete failed: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping("/folders/create")
+    public ResponseEntity<?> createFolder(
+            @RequestHeader(name = "Authorization", required = false) String authHeader,
+            @RequestBody CreateFolderRequest request) {
+        
+        String username = requireValidUser(authHeader);
+        String fullLogicalPath = Paths.get(username, request.logicalPath()).toString().replace("\\", "/");
+
+        try {
+            fileService.createVirtualPath(fullLogicalPath);
+            return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("message", "Folder created successfully"));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
         }
     }
 }

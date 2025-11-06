@@ -7,18 +7,24 @@ import com.nas_backend.model.UserToken;
 
 import org.springframework.stereotype.Service;
 import org.springframework.util.FileCopyUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import jakarta.annotation.PostConstruct;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class AuthService {
+
+    private static final Logger logger = LoggerFactory.getLogger(AuthService.class);
 
     private static final String CONFIG_DIR = "config";
     private static final String USERS_FILE_NAME = "users.json";
@@ -27,11 +33,13 @@ public class AuthService {
     private final Map<String, UserConfig> users = new ConcurrentHashMap<>(); // username -> UserConfig (full user data)
     private final Map<String, UserToken> activeTokens = new ConcurrentHashMap<>(); // token -> UserToken (login session)
     private final AppConfigService configService;
+    private final FileService fileService;
 
     private final ObjectMapper mapper = new ObjectMapper();
 
-    public AuthService(AppConfigService configService) {
+    public AuthService(AppConfigService configService, FileService fileService) {
         this.configService = configService;
+        this.fileService = fileService;
     }
 
     private long getTokenTtlSeconds() {
@@ -82,12 +90,48 @@ public class AuthService {
             throw new RuntimeException("Invalid username or password");
         }
 
+        // Ensure user's virtual root directory exists
+        try {
+            fileService.createVirtualPath(username);
+            logger.info("Verified virtual root for user: {}", username);
+        } catch (Exception e) {
+            logger.error("Failed to create/verify root virtual folder for user: {}", username, e);
+        }
+
+        // Ensure user's physical root directory exists
+        try {
+            ensureUserStoragePaths(username);
+        } catch (IOException e) {
+            logger.warn("Could not create all physical storage paths for user: {}", username, e);
+        }
+
         // Log out previous sessions
         activeTokens.values().removeIf(t -> t.getUsername().equals(username));
 
         String token = UUID.randomUUID().toString();
         activeTokens.put(token, new UserToken(username, token, getTokenTtlSeconds()));
         return token;
+    }
+
+    private void ensureUserStoragePaths(String username) throws IOException {
+        List<String> storagePaths = configService.getConfig().getStorage().getPaths();
+        if (storagePaths == null || storagePaths.isEmpty()) {
+            logger.warn("No storage paths configured in config.json! Cannot create physical user folders.");
+            return;
+        }
+
+        logger.info("Verifying physical storage paths for user: {}", username);
+        for (String drivePath : storagePaths) {
+            Path userPhysicalPath = Paths.get(drivePath, username);
+            if (Files.notExists(userPhysicalPath)) {
+                try {
+                    Files.createDirectories(userPhysicalPath);
+                    logger.info("Created missing physical path: {}", userPhysicalPath);
+                } catch (IOException e) {
+                    logger.error("Failed to create physical path at: {}", userPhysicalPath, e);
+                }
+            }
+        }
     }
 
     public void logout(String token) {
