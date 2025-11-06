@@ -22,7 +22,7 @@
         ],
         "quotaGB": 1000
     },
-    "trashcan": {
+    "trashCan": {
         "enabled": true,
         "quotaGB": 50,
         "retentionDays": 30

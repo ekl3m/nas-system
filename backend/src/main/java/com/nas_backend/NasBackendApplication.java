@@ -5,7 +5,6 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 import java.io.File;
-import java.net.URL;
 
 @SpringBootApplication
 @EnableScheduling
@@ -17,41 +16,28 @@ public class NasBackendApplication {
 	}
 
 	private static String getAppRootPath() {
-        try {
-            // Grab URL location
-            URL location = NasBackendApplication.class.getProtectionDomain().getCodeSource().getLocation();
-            
-            // Extract path from URL
-            String path = location.getPath();
+		try {
+			File source = new File(NasBackendApplication.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+			String path = source.getAbsolutePath();
 
-            // If path contains "!/", it means, that we are in a JAR file
-            // Path looks like this: /.../nas-backend.jar!/BOOT-INF/classes!/
-            // Everything after ".jar" has to be cut out
-            if (path.contains("!/")) {
-                path = path.substring(0, path.indexOf("!/"));
-                
-                // Sometimes path will start wih "file:"
-                if (path.startsWith("file:")) {
-                    path = path.substring(5);
-                }
-            }
+			// Scenario A: IDE launch
+			if (path.endsWith(File.separator + "classes")) {
+				// Go back up two directories
+				return new File(path).getParentFile().getParentFile().getAbsolutePath();
+			}
 
-            // Now path is either "/.../nas-backend.jar" or "/.../target/classes/"
-            File source = new File(path);
+			// Scenario B: JAR file launch
+			if (path.endsWith(".jar")) {
+				// Go back up two directories
+				return new File(path).getParentFile().getParentFile().getAbsolutePath();
+			}
 
-            if (source.isDirectory()) {
-                // Launch from IDE, source is ".../target/classes"
-                // Go back up directory tree twice, to "backend" and return
-                return source.getParentFile().getParentFile().getAbsolutePath();
-            } else {
-                // Launch form JAR, source is ".../nas-backend.jar"
-                // Return the foder which contains .jar
-                return source.getParentFile().getAbsolutePath();
-            }
+			// Scenariusz awaryjny (np. dziwne testy)
+			return source.getParentFile().getAbsolutePath();
 
-        } catch (Exception e) { 
-            System.err.println("FATAL: Could not determine app root path, falling back to working directory. " + e.getMessage());
-            return ".";
-        }
-    }
+		} catch (Exception e) {
+			System.err.println("FATAL: Could not determine app root path, falling back to working directory. " + e.getMessage());
+			return ".";
+		}
+	}
 }
