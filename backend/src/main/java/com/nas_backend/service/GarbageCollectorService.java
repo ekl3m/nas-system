@@ -33,12 +33,12 @@ public class GarbageCollectorService {
     @Transactional
     public void emptyTrashTask() {
         AppConfig config = configService.getConfig();
-        if (!config.getTrashcan().isEnabled()) {
+        if (!config.getTrashCan().isEnabled()) {
             logger.info("Garbage Collector: Trash is disabled, skipping task.");
             return;
         }
 
-        int retentionDays = config.getTrashcan().getRetentionDays();
+        int retentionDays = config.getTrashCan().getRetentionDays();
         logger.info("Garbage Collector: Running task to clean items older than {} days...", retentionDays);
 
         // Find expired roots in trash

@@ -4,7 +4,7 @@ public class AppConfig {
     private StorageConfig storage;
     private BackupConfig backup;
     private ServerConfig server;
-    private TrashcanConfig trashcan;
+    private TrashCanConfig trashcan;
 
     // Empty constructor is required by Jackson
     public AppConfig() {
@@ -23,7 +23,7 @@ public class AppConfig {
         return server;
     }
 
-    public TrashcanConfig getTrashcan() {
+    public TrashCanConfig getTrashCan() {
         return trashcan;
     }
 
@@ -41,7 +41,7 @@ public class AppConfig {
         this.server = server;
     }
 
-    public void setTrashcan(TrashcanConfig trashcan) {
+    public void setTrashCan(TrashCanConfig trashcan) {
         this.trashcan = trashcan;
     }
 }

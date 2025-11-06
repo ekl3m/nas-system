@@ -156,7 +156,7 @@ public class FileService {
         // Store original path, so that it remains restorable
         String originalParentPath = rootNodeToDelete.getParentPath();
 
-        if (config.getTrashcan().isEnabled()) {
+        if (config.getTrashCan().isEnabled()) {
             // Virtual trashcan logic
             logger.info("Moving resource and its children to virtual trash...");
             String userName = originalParentPath.split("/")[0]; // "admin"
