@@ -5,13 +5,26 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 import java.io.File;
+import java.nio.file.Paths;
 
 @SpringBootApplication
 @EnableScheduling
 public class NasBackendApplication {
 
 	public static void main(String[] args) {
-		System.setProperty("APP_ROOT_PATH", getAppRootPath());
+		String rootPath = getAppRootPath();
+
+        try {
+            Paths.get(rootPath, "data").toFile().mkdirs();
+            Paths.get(rootPath, "logs").toFile().mkdirs();
+            Paths.get(rootPath, "config").toFile().mkdirs();
+        } catch (Exception e) {
+            System.err.println("FATAL: Could not create necessary directories at root: " + rootPath);
+            e.printStackTrace();
+            return; // Do not start if this operation failed
+        }
+
+		System.setProperty("APP_ROOT_PATH", rootPath);
 		SpringApplication.run(NasBackendApplication.class, args);
 	}
 
