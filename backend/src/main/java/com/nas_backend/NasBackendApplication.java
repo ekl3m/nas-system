@@ -30,11 +30,12 @@ public class NasBackendApplication {
 
 	private static String getAppRootPath() {
 		try {
-			File source = new File(NasBackendApplication.class.getProtectionDomain().getCodeSource().getLocation().toURI());
-			String path = source.getAbsolutePath();
+			String path = NasBackendApplication.class.getProtectionDomain().getCodeSource().getLocation().getPath();
+
+			path = java.net.URLDecoder.decode(path, "UTF-8");
 
 			// Scenario A: IDE launch
-			if (path.endsWith(File.separator + "classes")) {
+			if (path.endsWith("/target/classes/")) {
 				// Go back up two directories
 				return new File(path).getParentFile().getParentFile().getAbsolutePath();
 			}
@@ -46,8 +47,8 @@ public class NasBackendApplication {
 			}
 
 			// Scenariusz awaryjny (np. dziwne testy)
-			return source.getParentFile().getAbsolutePath();
-
+			return new File(path).getParent();
+			
 		} catch (Exception e) {
 			System.err.println("FATAL: Could not determine app root path, falling back to working directory. " + e.getMessage());
 			return ".";
