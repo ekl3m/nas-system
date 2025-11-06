@@ -29,28 +29,17 @@ public class NasBackendApplication {
 	}
 
 	private static String getAppRootPath() {
+		// Create a ghost file in current working directory
+		File here = new File(".");
 		try {
-			String path = NasBackendApplication.class.getProtectionDomain().getCodeSource().getLocation().getPath();
+			// Find out its full canonical path
+			String currentWorkingDirectory = here.getCanonicalPath();
 
-			path = java.net.URLDecoder.decode(path, "UTF-8");
+			// Knowing that launch folder is target, revert one directory upwards to .../backend
+			return new File(currentWorkingDirectory).getParent();
 
-			// Scenario A: IDE launch
-			if (path.endsWith("/target/classes/")) {
-				// Go back up two directories
-				return new File(path).getParentFile().getParentFile().getAbsolutePath();
-			}
-
-			// Scenario B: JAR file launch
-			if (path.endsWith(".jar")) {
-				// Go back up two directories
-				return new File(path).getParentFile().getParentFile().getAbsolutePath();
-			}
-
-			// Scenariusz awaryjny (np. dziwne testy)
-			return new File(path).getParent();
-			
 		} catch (Exception e) {
-			System.err.println("FATAL: Could not determine app root path, falling back to working directory. " + e.getMessage());
+			System.err.println("FATAL: Could not determine app root path, falling back. " + e.getMessage());
 			return ".";
 		}
 	}
