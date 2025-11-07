@@ -1,4 +1,4 @@
-@token = 3fce0564-88a2-4f46-8bf0-646641d4d2a2
+@token = d1d3fd08-7cce-494f-bc9d-068d08d7ca61
 
 ### Login
 POST http://localhost:8080/api/auth/login
@@ -10,7 +10,7 @@ Content-Type: application/json
 }
 
 ### Lista plików
-GET http://localhost:8080/api/files/list?path=testy
+GET http://localhost:8080/api/files/list
 Authorization: Bearer {{token}}
 
 ### Lista plików w koszu
@@ -28,6 +28,17 @@ Content-Type: text/plain
 
 < /Users/sqstudio/Desktop/plik.txt
 --WebAppBoundary--
+
+### Przenies plik
+
+PUT http://localhost:8080/api/files/move
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "fromPath": "testy/plik.txt",
+    "toPath": "plik.txt"
+}
 
 ### Usuń plik
 DELETE http://localhost:8080/api/files/delete?path=testy/plik.txt

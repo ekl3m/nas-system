@@ -29,8 +29,8 @@ public class FileController {
 
     // DTO Records
 
-    public record CreateFolderRequest(String logicalPath) {
-    }
+    public record CreateFolderRequest(String logicalPath) {}
+    public record MoveRequest(String fromPath, String toPath) {}
 
     public FileController(FileService fileService, AuthService authService) {
         this.fileService = fileService;
@@ -121,6 +121,37 @@ public class FileController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Access denied: path outside storage"));
         } catch (IOException e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Delete failed: " + e.getMessage()));
+        }
+    }
+
+    @PutMapping("/move")
+    public ResponseEntity<?> moveResource(@RequestHeader(name = "Authorization", required = false) String authHeader,
+            @RequestBody MoveRequest moveRequest) {
+        String username = requireValidUser(authHeader);
+
+        String userFromPath = Paths.get(username, moveRequest.fromPath()).toString().replace("\\", "/");
+        String userToPath = Paths.get(username, moveRequest.toPath()).toString().replace("\\", "/");
+
+        // Do not move things in trash
+        String trashPrefix = username + "/trash";
+        if (userFromPath.startsWith(trashPrefix) || userToPath.startsWith(trashPrefix)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "Move/Rename operations are not allowed on items in the trash. Please restore the item first."));
+        }
+
+        // Path validation
+        if (moveRequest.fromPath() == null || moveRequest.toPath() == null ||
+                moveRequest.fromPath().contains("..") || moveRequest.toPath().contains("..")) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", "Invalid paths specified."));
+        }
+
+        try {
+            // Call moving engine
+            fileService.moveResource(userFromPath, userToPath);
+            return ResponseEntity.ok(Map.of("message", "Resource moved successfully to " + moveRequest.toPath()));
+        } catch (IOException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Move failed: " + e.getMessage()));
         }
     }
 
