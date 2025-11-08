@@ -1,4 +1,4 @@
-@token = d1d3fd08-7cce-494f-bc9d-068d08d7ca61
+@token = 387d6258-483e-43d3-9073-b9c76e996d50
 
 ### Login
 POST http://localhost:8080/api/auth/login
@@ -9,8 +9,13 @@ Content-Type: application/json
   "password": "admin"
 }
 
-### Lista plików
+## Lista plików w folderze root
+
 GET http://localhost:8080/api/files/list
+Authorization: Bearer {{token}}
+
+### Lista plików w folderze root/testy
+GET http://localhost:8080/api/files/list?path=testy
 Authorization: Bearer {{token}}
 
 ### Lista plików w koszu

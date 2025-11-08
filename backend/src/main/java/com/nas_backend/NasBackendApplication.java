@@ -19,7 +19,6 @@ public class NasBackendApplication {
 		String dataPath = Paths.get(rootPath, "data").toAbsolutePath().toString();
 		String logsPath = Paths.get(rootPath, "logs").toAbsolutePath().toString();
 
-		// KROK 2: Wyświetl meldunek (to, o co prosiłeś)
 		System.out.println("===================================================================");
 		System.out.println("NAS SYSTEM STARTING UP...");
 		System.out.println("APP ROOT PATH (APP_ROOT_PATH) : " + rootPath);
@@ -44,32 +43,30 @@ public class NasBackendApplication {
 
 	private static String getAppRootPath() {
         try {
-            // Bierzemy URL, który jest bezpieczniejszy niż URI
             var location = NasBackendApplication.class.getProtectionDomain().getCodeSource().getLocation();
             String protocol = location.getProtocol();
             String path = URLDecoder.decode(location.getPath(), "UTF-8");
 
             if ("file".equals(protocol)) {
-                // Scenariusz 1: Odpalamy z IDE.
-                // Ścieżka to ".../backend/target/classes/"
+                // IDE launch
                 File file = new File(path);
-                // Cofamy się o 2 poziomy: z 'classes' do 'target', z 'target' do 'backend'
+                // Go back up two times in directory tree
                 return file.getParentFile().getParentFile().getAbsolutePath();
             }
 
             if ("jar".equals(protocol)) {
-                // Scenariusz 2: Odpalamy z pliku .jar.
-                // Ścieżka to "file:/.../backend/target/app.jar!/BOOT-INF/classes!"
-                // Musimy wyciąć ścieżkę do samego pliku JAR.
+                // JAR launch
+                // Path example: "file:/.../backend/target/app.jar!/BOOT-INF/classes!"
+                // Cut out jar path
                 String jarPath = path.substring(0, path.indexOf("!/"));
                 
-                // Czasem ścieżka może mieć jeszcze "file:" na początku
+                // Path sometimes can have "file:" in the beginning
                 if (jarPath.startsWith("file:")) {
                     jarPath = jarPath.substring(5);
                 }
 
-                File jarFile = new File(jarPath); // To jest ".../target/app.jar"
-                // Cofamy się o 2 poziomy: z 'app.jar' do 'target', z 'target' do 'backend'
+                File jarFile = new File(jarPath); // This is ".../target/app.jar"
+				// Go back up two times in directory tree
                 return jarFile.getParentFile().getParentFile().getAbsolutePath();
             }
 

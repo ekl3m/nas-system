@@ -44,7 +44,7 @@ public class FileService {
     }
 
     @Transactional
-    public void uploadFile(String logicalParentPath, MultipartFile file, boolean overwrite) throws IOException {
+    public void uploadFile(String logicalParentPath, MultipartFile file) throws IOException { 
         logger.info("Upload request for '{}' in logical path '{}'", file.getOriginalFilename(), logicalParentPath);
 
         // Make sure that parent path exists in file node database
@@ -59,21 +59,19 @@ public class FileService {
             throw new IOException("File size exceeds the maximum upload limit.");
         }
 
-        // Build complete logical path
-        String finalLogicalPath = Paths.get(logicalParentPath, originalFileName).toString().replace("\\", "/");
+        // Find a unique filename in the target folder
+        String finalFileName = getUniqueFileName(logicalParentPath, originalFileName);
+        String finalLogicalPath = Paths.get(logicalParentPath, finalFileName).toString().replace("\\", "/");
 
-        // Verify whether a file node using this logical path already exists
-        FileNode existingNode = fileIndexService.getNode(finalLogicalPath);
-
-        // Overwrite validation
-        if (existingNode != null && !overwrite) {
-            // File using this logical path exists and user did not agree to overwrite it
-            throw new IOException("A file with this name already exists at this location. Set overwrite=true to replace it.");
+        if (!finalFileName.equals(originalFileName)) {
+            logger.warn("CONFLICT: Original name was taken. Saving as: {}", finalFileName);
         }
 
         // Find best storage path and save the file
         String bestStoragePath = findBestStoragePath(fileSize);
         String userName = logicalParentPath.split("/")[0];
+
+        // Use a unique physical name (UUID) - this is still crucial
         String uniquePhysicalName = UUID.randomUUID().toString() + "-" + originalFileName;
         Path physicalPath = Paths.get(bestStoragePath, userName, uniquePhysicalName);
 
@@ -81,40 +79,19 @@ public class FileService {
         file.transferTo(physicalPath);
         logger.info("File saved successfully to new physical path: {}", physicalPath);
 
-        // Prepare file node DB entry (update old or create new)
-        FileNode nodeToSave;
+        // ALWAYS create a new node
+        FileNode nodeToSave = new FileNode();
+        nodeToSave.setCreatedAt(Instant.now());
 
-        if (existingNode != null) {
-            // OVERWRITE MODE
-            nodeToSave = existingNode;
-            logger.warn("Overwrite mode: Found existing node for: {}", finalLogicalPath);
-
-            // Delete old physical file as an attempt to spare it from becoming an orphan
-            logger.info("Attempting to delete old physical file at: {}", existingNode.getPhysicalPath());
-            File oldPhysicalFile = new File(existingNode.getPhysicalPath());
-            if (oldPhysicalFile.exists()) {
-                try {
-                    Files.delete(oldPhysicalFile.toPath());
-                    logger.info("Deleted old physical file successfully.");
-                } catch (IOException e) {
-                    logger.warn("Could not delete old physical file: {}", oldPhysicalFile.getAbsolutePath(), e);
-                }
-            }
-        } else {
-            // NEW FILE MODE, create an entry
-            nodeToSave = new FileNode();
-            nodeToSave.setCreatedAt(Instant.now());
-        }
-
-        // Set or update all fields
+        // Set all fields
         nodeToSave.setLogicalPath(finalLogicalPath);
         nodeToSave.setParentPath(logicalParentPath);
-        nodeToSave.setPhysicalPath(physicalPath.toString()); // New file physical path
-        nodeToSave.setFileName(originalFileName);
+        nodeToSave.setPhysicalPath(physicalPath.toString());
+        nodeToSave.setFileName(finalFileName);
         nodeToSave.setDirectory(false);
         nodeToSave.setSize(fileSize);
         nodeToSave.setModifiedAt(Instant.now());
-        nodeToSave.setRestorePath(null); // Must remain null until deletion
+        nodeToSave.setRestorePath(null); // Always null on a new upload
 
         fileIndexService.addOrUpdateNode(nodeToSave);
         logger.info("File index (DB) updated for logical path: {}", finalLogicalPath);
@@ -150,97 +127,103 @@ public class FileService {
         AppConfig config = configService.getConfig();
         logger.warn("Delete request for logical path: {}", logicalPath);
 
-        // Find root node to delete
-        FileNode rootNodeToDelete = fileIndexService.getNode(logicalPath);
-        if (rootNodeToDelete == null) {
-            throw new IOException("Resource to delete not found in index: " + logicalPath);
-        }
-
-        // Store original path, so that it remains restorable
-        String originalParentPath = rootNodeToDelete.getParentPath();
-
         if (config.getTrashCan().isEnabled()) {
-            // Virtual trashcan logic
-            logger.info("Moving resource and its children to virtual trash...");
-            String userName = originalParentPath.split("/")[0]; // "admin"
+            FileNode rootNodeToDelete = fileIndexService.getNode(logicalPath);
+            if (rootNodeToDelete == null) {
+                throw new IOException("Resource to delete not found in index: " + logicalPath);
+            }
+
+            String userName = rootNodeToDelete.getParentPath().split("/")[0];
             String trashParentPath = userName + "/trash";
 
-            // Create a new base file path in trash e.g. "admin/trash/testy-uuid"
-            String newBaseNameInTrash = rootNodeToDelete.getFileName() + "-"
-                    + UUID.randomUUID().toString().substring(0, 8);
-            String newBasePathInTrash = Paths.get(trashParentPath, newBaseNameInTrash).toString().replace("\\", "/");
+            // Find a unique name in the trash
+            String newFileNameInTrash = getUniqueFileName(trashParentPath, rootNodeToDelete.getFileName());
+            String newLogicalPathInTrash = Paths.get(trashParentPath, newFileNameInTrash).toString().replace("\\", "/");
 
-            // Find all nodes to move (this single one or a directory and its children)
-            List<FileNode> nodesToMove = fileNodeRepository.findByLogicalPathStartingWith(logicalPath);
-
-            for (FileNode node : nodesToMove) {
-                // Compute a new logical path, sparing the structure e.g. "admin/testy/plik.txt" -> "admin/trash/testy-uuid/plik.txt"
-                String oldSubPath = node.getLogicalPath().substring(logicalPath.length()); // np. "" lub "/plik.txt"
-                String newLogicalPath = newBasePathInTrash + oldSubPath;
-                String newParentPath = new File(newLogicalPath).getParent().replace("\\", "/");
-
-                // Save the origin path
-                if (node.getLogicalPath().equals(logicalPath)) {
-                    node.setRestorePath(originalParentPath);
-                }
-
-                // "Move" it virtually
-                node.setLogicalPath(newLogicalPath);
-                node.setParentPath(newParentPath);
-                node.setModifiedAt(Instant.now());
-
-                fileIndexService.addOrUpdateNode(node);
-            }
-            logger.info("All {} nodes related to {} virtually moved to new trash path: {}", nodesToMove.size(),
-                    logicalPath, newBasePathInTrash);
+            // Call the universal move engine
+            logger.info("Moving resource to trash as: {}", newLogicalPathInTrash);
+            moveResource(logicalPath, newLogicalPathInTrash);
 
         } else {
-            // Permanent deletion logic
+            // Permanent deletion
             logger.warn("Trash can is disabled. Permanently deleting resources.");
             deleteRecursively(logicalPath);
         }
     }
 
     @Transactional
-    public void moveResource(String oldLogicalPath, String newLogicalPath) throws IOException {
-        logger.info("Move/Rename request from '{}' to '{}'", oldLogicalPath, newLogicalPath);
+    public void restoreResource(String logicalPathInTrash) throws IOException {
+        logger.info("Restore request for resource: {}", logicalPathInTrash);
 
-        // Validate
-        FileNode node = fileIndexService.getNode(oldLogicalPath);
-        if (node == null) {
+        // Find the node and its restore path
+        FileNode rootNodeToRestore = fileNodeRepository.findByLogicalPath(logicalPathInTrash).orElse(null);
+        if (rootNodeToRestore == null) {
+            throw new IOException("Resource to restore not found in trash: " + logicalPathInTrash);
+        }
+
+        String restoreParentPath = rootNodeToRestore.getRestorePath();
+        if (restoreParentPath == null) {
+            throw new IOException("Cannot restore: This item is not a valid trash item (restorePath is null).");
+        }
+
+        // Calculate the original target path
+        String targetLogicalPath = Paths.get(restoreParentPath, rootNodeToRestore.getFileName()).toString()
+                .replace("\\", "/");
+
+        // Call the universal move engine
+        logger.info("Restoring resource from {} to {}", logicalPathInTrash, targetLogicalPath);
+        moveResource(logicalPathInTrash, targetLogicalPath);
+    }
+
+    @Transactional
+    public void moveResource(String oldLogicalPath, String newLogicalPath) throws IOException {
+        logger.info("Universal Smart Move: from [{}] to [{}]", oldLogicalPath, newLogicalPath);
+
+        // Validate source
+        FileNode rootNodeToMove = fileNodeRepository.findByLogicalPath(oldLogicalPath).orElse(null);
+        if (rootNodeToMove == null) {
             throw new IOException("Source resource not found in index: " + oldLogicalPath);
         }
-        if (fileIndexService.nodeExists(newLogicalPath)) {
-            throw new IOException("Destination logical path already exists: \"" + newLogicalPath + "\"");
+
+        String originalParentPath = rootNodeToMove.getParentPath();
+
+        // Handle destination conflicts
+        String finalLogicalPath = newLogicalPath;
+        String finalFileName = Paths.get(newLogicalPath).getFileName().toString();
+        String targetParentPath = Paths.get(newLogicalPath).getParent().toString().replace("\\", "/");
+
+        if (fileNodeRepository.existsByLogicalPath(newLogicalPath)) {
+            logger.warn("CONFLICT: Destination {} exists. Finding unique name...", newLogicalPath);
+            finalFileName = getUniqueFileName(targetParentPath, finalFileName);
+            finalLogicalPath = Paths.get(targetParentPath, finalFileName).toString().replace("\\", "/");
+            logger.warn("CONFLICT RESOLVED: Renaming moved resource to: {}", finalLogicalPath);
         }
-        
-        // Just replace an entry in file node DB
-        String newParentPath = new File(newLogicalPath).getParent().replace("\\", "/");
-        String newFileName = new File(newLogicalPath).getName();
-        
-        node.setLogicalPath(newLogicalPath);
-        node.setParentPath(newParentPath);
-        node.setFileName(newFileName);
-        node.setModifiedAt(Instant.now());
 
-        fileIndexService.addOrUpdateNode(node);
+        // Get all nodes to move
+        List<FileNode> nodesToMove = fileNodeRepository.findByLogicalPathStartingWith(oldLogicalPath);
+        logger.info("Moving {} nodes...", nodesToMove.size());
 
-        // If it was a directory, update its children paths
-        if (node.isDirectory()) {
-            List<FileNode> children = fileNodeRepository.findByLogicalPathStartingWith(oldLogicalPath + "/");
-            for (FileNode child : children) {
-                String oldChildPath = child.getLogicalPath();
-                String newChildPath = oldChildPath.replaceFirst(oldLogicalPath, newLogicalPath);
-                String newChildParentPath = new File(newChildPath).getParent().replace("\\", "/");
-                
-                child.setLogicalPath(newChildPath);
-                child.setParentPath(newChildParentPath);
-                fileIndexService.addOrUpdateNode(child);
+        for (FileNode node : nodesToMove) {
+            String oldSubPath = node.getLogicalPath().substring(oldLogicalPath.length());
+            String calculatedNewLogicalPath = finalLogicalPath + oldSubPath;
+            String calculatedNewParentPath = Paths.get(calculatedNewLogicalPath).getParent().toString().replace("\\",
+                    "/");
+
+            // "Move" it virtually
+            node.setLogicalPath(calculatedNewLogicalPath);
+            node.setParentPath(calculatedNewParentPath);
+            node.setModifiedAt(Instant.now());
+
+            // Set filename and restore path (only for the root node of the move)
+            if (node.getLogicalPath().equals(calculatedNewLogicalPath)) {
+                node.setFileName(finalFileName);
+                node.setRestorePath(originalParentPath); // Save original parent path
             }
-            logger.info("Updated {} children nodes for renamed folder.", children.size());
+
+            fileIndexService.addOrUpdateNode(node);
         }
-        
-        logger.info("Resource virtually moved in index. Physical file was NOT touched.");
+
+        logger.info("Move complete. Root node '{}' is now at '{}'", oldLogicalPath, finalLogicalPath);
     }
 
     public List<FileInfo> listFiles(String logicalPath) {
@@ -284,6 +267,37 @@ public class FileService {
         folderNode.setRestorePath(null);
 
         fileIndexService.addOrUpdateNode(folderNode);
+    }
+
+    private String getUniqueFileName(String targetParentPath, String originalFileName) {
+        // Check if the original path is available
+        String finalLogicalPath = Paths.get(targetParentPath, originalFileName).toString().replace("\\", "/");
+        if (!fileIndexService.nodeExists(finalLogicalPath)) {
+            return originalFileName; // It's available, do nothing
+        }
+
+        // Path is taken. Time for "Windows 95" logic.
+        String baseName;
+        String extension;
+        int dotIndex = originalFileName.lastIndexOf('.');
+
+        if (dotIndex > 0) {
+            baseName = originalFileName.substring(0, dotIndex);
+            extension = originalFileName.substring(dotIndex);
+        } else {
+            baseName = originalFileName;
+            extension = "";
+        }
+
+        int count = 1;
+        String newFileName;
+        do {
+            newFileName = baseName + "(" + count + ")" + extension;
+            finalLogicalPath = Paths.get(targetParentPath, newFileName).toString().replace("\\", "/");
+            count++;
+        } while (fileIndexService.nodeExists(finalLogicalPath));
+
+        return newFileName;
     }
 
     @Transactional

@@ -20,7 +20,6 @@ public interface FileNodeRepository extends JpaRepository<FileNode, Long> {
     boolean existsByLogicalPath(String logicalPath);
 
     List<FileNode> findByLogicalPathStartingWith(String prefix);
-
-    List<FileNode> findByRestorePathIsNotNullAndModifiedAtBefore(Instant cutoffDate);
-
+    
+    List<FileNode> findByParentPathEndingWithAndModifiedAtBefore(String parentSuffix, Instant cutoffDate);
 }

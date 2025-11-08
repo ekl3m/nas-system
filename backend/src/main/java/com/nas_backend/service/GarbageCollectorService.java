@@ -29,12 +29,16 @@ public class GarbageCollectorService {
         this.configService = configService;
     }
 
-    @Scheduled(cron = "0 0 3 * * ?")// AM
+    /**
+     * This task runs automatically, e.g., every day at 3 AM.
+     * "cron =" -> second, minute, hour, day, month, year
+     */
+    @Scheduled(cron = "0 0 3 * * ?") // Runs at 3:00 AM daily
     @Transactional
     public void emptyTrashTask() {
         AppConfig config = configService.getConfig();
         if (!config.getTrashCan().isEnabled()) {
-            logger.info("Garbage Collector: Trash is disabled, skipping task.");
+            logger.info("Garbage Collector: Trash can is disabled, skipping task.");
             return;
         }
 
@@ -43,7 +47,9 @@ public class GarbageCollectorService {
 
         // Find expired roots in trash
         Instant cutoffDate = Instant.now().minus(retentionDays, ChronoUnit.DAYS);
-        List<FileNode> expiredRoots = fileNodeRepository.findByRestorePathIsNotNullAndModifiedAtBefore(cutoffDate);
+
+        List<FileNode> expiredRoots = fileNodeRepository
+                .findByParentPathEndingWithAndModifiedAtBefore("/trash", cutoffDate);
 
         if (expiredRoots.isEmpty()) {
             logger.info("Garbage Collector: No expired root items found in trash. Job done.");
@@ -55,18 +61,18 @@ public class GarbageCollectorService {
 
         logger.info("Garbage Collector: Found {} expired root items to delete.", expiredRoots.size());
 
-        // For each root, delete its branches
+        // For each root, delete its branches (This logic was already perfect)
         for (FileNode root : expiredRoots) {
             String rootLogicalPath = root.getLogicalPath();
 
-            // Find nodes to delete 
+            // Find nodes to delete (the root AND all its children)
             List<FileNode> nodesToDelete = fileNodeRepository.findByLogicalPathStartingWith(rootLogicalPath);
 
             int deletedFiles = 0;
             int deletedNodes = 0;
 
             for (FileNode node : nodesToDelete) {
-                // Delete physical file if it is not a directory (which are not physical)
+                // Delete physical file if it is not a directory
                 if (!node.isDirectory()) {
                     File file = new File(node.getPhysicalPath());
                     if (file.exists()) {
