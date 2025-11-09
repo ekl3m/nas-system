@@ -12,6 +12,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -29,10 +31,6 @@ public class GarbageCollectorService {
         this.configService = configService;
     }
 
-    /**
-     * This task runs automatically, e.g., every day at 3 AM.
-     * "cron =" -> second, minute, hour, day, month, year
-     */
     @Scheduled(cron = "0 0 3 * * ?") // Runs at 3:00 AM daily
     @Transactional
     public void emptyTrashTask() {
@@ -98,5 +96,35 @@ public class GarbageCollectorService {
 
         logger.info("Garbage Collector: Task finished. Permanently deleted {} total nodes and {} total physical files.",
                 totalDeletedNodes, totalDeletedFiles);
+    }
+
+    @Scheduled(cron = "0 5 3 * * ?") // Runs at 3:05 AM daily
+    @Transactional
+    public void cleanOrphanEntriesTask() {
+        logger.info("Garbage Collector (Orphans): Running task to find and remove orphan DB entries...");
+        
+        // Get all active files from the database (select files that are not directories and are not in the trash)
+        List<FileNode> allActiveFiles = fileNodeRepository.findAllActiveFiles("/trash");
+
+        if (allActiveFiles.isEmpty()) {
+            logger.info("Garbage Collector (Orphans): No active files found to check. Job done.");
+            return;
+        }
+        
+        int orphanCount = 0;
+        
+        // Check each file for physical existence
+        for (FileNode node : allActiveFiles) {
+            Path physicalPath = Paths.get(node.getPhysicalPath());
+            
+            if (Files.notExists(physicalPath)) {
+                // This is an orphan entry! The file is in the DB but not on the disk
+                logger.warn("Garbage Collector (Orphans): Found orphan entry! Physical file missing: {}", node.getPhysicalPath());
+                fileNodeRepository.delete(node);
+                orphanCount++;
+            }
+        }
+
+        logger.info("Garbage Collector (Orphans): Task finished. Found and removed {} orphan entries.", orphanCount);
     }
 }

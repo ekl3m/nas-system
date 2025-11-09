@@ -2,6 +2,8 @@ package com.nas_backend.repository;
 
 import com.nas_backend.model.FileNode;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
@@ -22,4 +24,7 @@ public interface FileNodeRepository extends JpaRepository<FileNode, Long> {
     List<FileNode> findByLogicalPathStartingWith(String prefix);
     
     List<FileNode> findByParentPathEndingWithAndModifiedAtBefore(String parentSuffix, Instant cutoffDate);
+
+    @Query("SELECT n FROM FileNode n WHERE n.isDirectory = false AND n.parentPath NOT LIKE %:suffix")
+    List<FileNode> findAllActiveFiles(@Param("suffix") String suffix);
 }

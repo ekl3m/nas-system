@@ -62,9 +62,16 @@ public class AuthService {
 
         try {
             List<UserConfig> userList = mapper.readValue(usersFile, new TypeReference<List<UserConfig>>() {});
+
             for (UserConfig u : userList) {
+                if (u.getUsername() == null || u.getUsername().startsWith(".")) {
+                    // Critical error. System admin must correct users.json.
+                    logger.error("FATAL: Invalid username found in users.json: '{}'. Usernames cannot be null or start with a dot.", u.getUsername());
+                    throw new RuntimeException("Invalid username in users.json. Usernames cannot be null or start with a dot.");
+                }
                 users.put(u.getUsername(), u);
             }
+
             System.out.println("Users loaded successfully from " + usersFile.getAbsolutePath());
         } catch (IOException e) {
             throw new RuntimeException("FATAL: Failed to load or parse users.json from " + usersFile.getAbsolutePath(), e);

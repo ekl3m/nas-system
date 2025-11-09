@@ -2,6 +2,7 @@ package com.nas_backend;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 import java.io.File;
@@ -9,6 +10,7 @@ import java.net.URLDecoder;
 import java.nio.file.Paths;
 
 @SpringBootApplication
+@EnableAsync
 @EnableScheduling
 public class NasBackendApplication {
 

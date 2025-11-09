@@ -22,10 +22,12 @@ public class FileIndexService {
 
     private final FileNodeRepository fileNodeRepository;
     private final AppConfigService configService;
+    private final BackupService backupService;
 
-    public FileIndexService(AppConfigService appConfigService, FileNodeRepository fileNodeRepository) {
+    public FileIndexService(AppConfigService appConfigService, FileNodeRepository fileNodeRepository, BackupService backupService) {
         this.configService = appConfigService;
         this.fileNodeRepository = fileNodeRepository;
+        this.backupService = backupService;
     }
 
     // If file node DB does not exist, run a backup search
@@ -64,11 +66,11 @@ public class FileIndexService {
         Path destination = Paths.get(rootPath, DATA_DIR_NAME, "nas.db");
 
         for (String drive : storagePaths) {
-            Path backupPath = Paths.get(drive, ".system_backup", "nas.db.backup");
+            Path backupPath = Paths.get(drive, ".nas.db.backup");
+
             if (Files.exists(backupPath)) {
                 try {
                     logger.warn("Found valid backup at {}. Copying to main DB path...", backupPath);
-                    // Copy file node DB backup to data folder
                     Files.copy(backupPath, destination);
                     return true;
                 } catch (IOException e) {
@@ -79,42 +81,18 @@ public class FileIndexService {
         return false;
     }
 
-    private synchronized void backupDatabase() {
-        String rootPath = System.getProperty("APP_ROOT_PATH");
-        Path source = Paths.get(rootPath, DATA_DIR_NAME, "nas.db");
-
-        if (!Files.exists(source))
-            return; // Nothing to backup
-
-        List<String> storagePaths = configService.getConfig().getStorage().getPaths();
-        if (storagePaths == null)
-            return;
-
-        logger.info("Performing database backup to all storage drives...");
-        for (String drive : storagePaths) {
-            try {
-                Path backupDir = Paths.get(drive, ".system_backup");
-                Files.createDirectories(backupDir);
-                Path destination = backupDir.resolve("nas.db.backup");
-
-                // Copy file node DB to storage drive, overwrite old backup
-                Files.copy(source, destination, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-            } catch (IOException e) {
-                logger.error("Failed to backup database to drive: {}", drive, e);
-            }
-        }
-    }
-
     // Saves or updates one node in file node DB
     public FileNode addOrUpdateNode(FileNode node) {
-        return fileNodeRepository.save(node);
+        FileNode savedNode = fileNodeRepository.save(node);
+        backupService.backupDatabase();
+        return savedNode;
     }
 
     // Saves a list of nodes in one transaction and performs ONE backup.
     @Transactional
     public List<FileNode> addOrUpdateNodes(List<FileNode> nodes) {
         List<FileNode> savedNodes = fileNodeRepository.saveAll(nodes);
-        backupDatabase(); // <-- Backup robimy JEDEN RAZ na końcu
+        backupService.backupDatabase();
         return savedNodes;
     }
 
@@ -124,7 +102,7 @@ public class FileIndexService {
         fileNodeRepository.findByLogicalPath(logicalPath).ifPresent(node -> {
             fileNodeRepository.delete(node);
             logger.info("Removed node from index: {}", logicalPath);
-            backupDatabase();
+            backupService.backupDatabase();
         });
     }
 

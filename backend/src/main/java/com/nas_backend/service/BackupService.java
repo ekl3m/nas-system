@@ -1,0 +1,63 @@
+package com.nas_backend.service;
+
+import com.nas_backend.model.AppConfig;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.List;
+
+@Service
+public class BackupService {
+
+    private static final Logger logger = LoggerFactory.getLogger(BackupService.class);
+    private static final String DATA_DIR_NAME = "data";
+
+    private final AppConfigService configService;
+
+    public BackupService(AppConfigService configService) {
+        this.configService = configService;
+    }
+
+
+    @Async // Do this operation in a separate thread without blocking the main application
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public void backupDatabase() {
+        // Wait a bit, so that the main application releases its blockade
+        try {
+            Thread.sleep(500);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        String rootPath = System.getProperty("APP_ROOT_PATH");
+        Path source = Paths.get(rootPath, DATA_DIR_NAME, "nas.db");
+
+        if (!Files.exists(source))
+            return; // Nothing to backup
+
+        AppConfig config = configService.getConfig();
+        List<String> storagePaths = config.getStorage().getPaths();
+        if (storagePaths == null)
+            return;
+
+        logger.info("[ASYNC-BACKUP] Performing database backup to all storage drives...");
+        for (String drive : storagePaths) {
+            try {
+                Path destination = Paths.get(drive, ".nas.db.backup");
+
+                Files.copy(source, destination, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                logger.info("[ASYNC-BACKUP] Backup successful to: {}", drive);
+            } catch (IOException e) {
+                logger.error("[ASYNC-BACKUP] Failed to backup database to drive: {}", drive, e);
+            }
+        }
+    }
+}

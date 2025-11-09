@@ -51,12 +51,18 @@ public class FileService {
     public FileOperationResponse uploadFile(String logicalParentPath, MultipartFile file) throws IOException {
         logger.info("Upload request for '{}' in logical path '{}'", file.getOriginalFilename(), logicalParentPath);
 
+        // Do not allow user to create files with empty names or names starting with a dot
+        String originalFileName = file.getOriginalFilename();
+        if (originalFileName == null || originalFileName.isEmpty() || originalFileName.startsWith(".")) {
+            logger.warn("Upload REJECTED: Filename is null, empty, or starts with a dot: {}", originalFileName);
+            throw new IOException("Invalid filename. Files cannot be hidden or have no name.");
+        }
+
         // Make sure that parent path exists in file node database
         createVirtualPath(logicalParentPath);
 
         AppConfig config = configService.getConfig();
         long fileSize = file.getSize();
-        String originalFileName = file.getOriginalFilename();
 
         // Size validation
         if (fileSize > (long) config.getServer().getMaxUploadSizeMB() * 1024 * 1024) {
@@ -204,6 +210,13 @@ public class FileService {
     public FileOperationResponse moveResource(String oldLogicalPath, String newLogicalPath) throws IOException {
         logger.info("Universal Smart Move: from [{}] to [{}]", oldLogicalPath, newLogicalPath);
 
+        // Do not allow user to move resources to destinations starting with a dot
+        String finalName = Paths.get(newLogicalPath).getFileName().toString();
+        if (finalName.startsWith(".")) {
+            logger.warn("Move REJECTED: Destination name starts with a dot. Path: {}", newLogicalPath);
+            throw new IOException("Invalid destination name. Files and folders cannot start with a dot.");
+        }
+
         // Validate source
         FileNode rootNodeToMove = fileNodeRepository.findByLogicalPath(oldLogicalPath).orElse(null);
         if (rootNodeToMove == null) {
@@ -281,7 +294,19 @@ public class FileService {
     }
 
     @Transactional
-    public FileOperationResponse createVirtualPath(String logicalPath) {
+    public FileOperationResponse createVirtualPath(String logicalPath) throws IOException {
+        // Do not allow user to create paths with empty names, containing multiple dots or starting with a dot
+        if (logicalPath == null || logicalPath.contains("..") || logicalPath.isBlank()) {
+            throw new IOException("Invalid path. Path cannot be null, empty, or contain '..'.");
+        }
+        String[] segments = logicalPath.split("/");
+        for (String segment : segments) {
+            if (segment.startsWith(".")) {
+                logger.warn("Create virtual path REJECTED: Path segment starts with a dot. Path: {}", logicalPath);
+                throw new IOException("Invalid path name. Folders or subfolders cannot start with a dot.");
+            }
+        }
+
         // Check if this path already exists
         FileNode existingNode = fileNodeRepository.findByLogicalPath(logicalPath).orElse(null);
         if (existingNode != null) {
