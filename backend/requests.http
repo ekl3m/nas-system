@@ -1,4 +1,4 @@
-@token = 387d6258-483e-43d3-9073-b9c76e996d50
+@token = bbc17293-7101-4993-981b-c7c153cd3285
 
 ### Login
 POST http://localhost:8080/api/auth/login

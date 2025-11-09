@@ -6,6 +6,7 @@ import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.File;
 import java.io.IOException;
@@ -105,9 +106,16 @@ public class FileIndexService {
     }
 
     // Saves or updates one node in file node DB
-    public void addOrUpdateNode(FileNode node) {
-        fileNodeRepository.save(node);
-        backupDatabase();
+    public FileNode addOrUpdateNode(FileNode node) {
+        return fileNodeRepository.save(node);
+    }
+
+    // Saves a list of nodes in one transaction and performs ONE backup.
+    @Transactional
+    public List<FileNode> addOrUpdateNodes(List<FileNode> nodes) {
+        List<FileNode> savedNodes = fileNodeRepository.saveAll(nodes);
+        backupDatabase(); // <-- Backup robimy JEDEN RAZ na końcu
+        return savedNodes;
     }
 
     // Removes a node from file node DB grounding on its logical path

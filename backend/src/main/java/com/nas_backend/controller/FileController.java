@@ -1,11 +1,12 @@
 package com.nas_backend.controller;
 
-import java.io.IOException;
-import java.nio.file.Paths;
-import java.util.List;
-import java.util.Map;
-
-import org.springframework.core.io.FileSystemResource;
+import com.nas_backend.model.FileInfo;
+import com.nas_backend.model.FileOperationResponse;
+import com.nas_backend.model.UserConfig;
+import com.nas_backend.service.AuthService;
+import com.nas_backend.service.FileService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -15,23 +16,22 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.nas_backend.service.AuthService;
-import com.nas_backend.service.FileService;
-import com.nas_backend.model.FileInfo;
-import com.nas_backend.model.UserConfig;
+import java.io.IOException;
+import java.nio.file.Paths;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/files")
 public class FileController {
 
     private final FileService fileService;
-    private final AuthService authService; // Injecting authService to validate tokens
+    private final AuthService authService;
+    private final Logger logger = LoggerFactory.getLogger(FileController.class);
 
-    // DTO Records
-
-    public record CreateFolderRequest(String logicalPath) {}
+    // DTO (records) for incoming JSON requests
     public record MoveRequest(String fromPath, String toPath) {}
     public record RestoreRequest(String logicalPath) {}
+    public record CreateFolderRequest(String logicalPath) {}
 
     public FileController(FileService fileService, AuthService authService) {
         this.fileService = fileService;
@@ -44,55 +44,35 @@ public class FileController {
         if (user == null) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Invalid or missing token");
         }
-        
         return user.getUsername();
     }
 
+    // Endpoints
+
     @GetMapping("/list")
-    public ResponseEntity<?> listFiles(@RequestHeader(name = "Authorization", required = false) String authHeader,
+    public ResponseEntity<List<FileInfo>> listFiles(
+            @RequestHeader(name = "Authorization", required = false) String authHeader,
             @RequestParam(name = "path", required = false, defaultValue = "") String path) {
+
         String username = requireValidUser(authHeader);
         String finalUserPath;
 
         if (path == null || path.isEmpty() || path.equals("/")) {
-            // If user asks for "root", return him his own folder e.g. "admin"
             finalUserPath = username;
         } else {
-            // If user asks for a subfolder, build a complete path
-            if (path.startsWith("/")) {
+            if (path.startsWith("/"))
                 path = path.substring(1);
-            }
             finalUserPath = Paths.get(username, path).toString().replace("\\", "/");
         }
 
+        logger.info("Listing files for logical path: {}", finalUserPath);
         List<FileInfo> files = fileService.listFiles(finalUserPath);
-
         return ResponseEntity.ok(files);
     }
 
-    @GetMapping("/download")
-    public ResponseEntity<?> download(@RequestHeader(name = "Authorization", required = false) String authHeader, @RequestParam(name = "path") String path) {
-        String username = requireValidUser(authHeader);
-
-        try {
-            String userPath = username + "/" + path;
-            Resource resource = fileService.getResource(userPath);
-            String filename = resource instanceof FileSystemResource
-                    ? ((FileSystemResource) resource).getFile().getName()
-                    : path.substring(path.lastIndexOf('/') + 1);
-
-            return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
-                    .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                    .body(resource);
-        } catch (SecurityException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Access denied: path outside storage"));
-        } catch (IOException e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "File or folder not found / internal error"));
-        }
-    }
-
     @PostMapping("/upload")
-    public ResponseEntity<?> upload(@RequestHeader(name = "Authorization", required = false) String authHeader,
+    public ResponseEntity<FileOperationResponse> upload(
+            @RequestHeader(name = "Authorization", required = false) String authHeader,
             @RequestParam(name = "path") String path,
             @RequestParam(name = "file") MultipartFile file) {
 
@@ -100,91 +80,118 @@ public class FileController {
         String userPath = Paths.get(username, path).toString().replace("\\", "/");
 
         try {
-            fileService.uploadFile(userPath, file);
-            return ResponseEntity.ok(Map.of("message", "File uploaded successfully"));
+            FileOperationResponse response = fileService.uploadFile(userPath, file);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (IOException e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Upload failed: " + e.getMessage()));
-        }
-    }
-
-    @DeleteMapping("/delete")
-    public ResponseEntity<?> deleteFile(@RequestHeader(name = "Authorization", required = false) String authHeader, @RequestParam(name = "path") String path) {
-        String username = requireValidUser(authHeader);
-
-        try {
-            String userPath = username + "/" + path;
-            fileService.deleteResource(userPath);
-            return ResponseEntity.ok(Map.of("message", "File deleted successfully"));
-        } catch (SecurityException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Access denied: path outside storage"));
-        } catch (IOException e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Delete failed: " + e.getMessage()));
-        }
-    }
-
-    @PostMapping("/restore")
-    public ResponseEntity<?> restoreResource(@RequestHeader(name = "Authorization", required = false) String authHeader, @RequestBody RestoreRequest request) {
-
-        String username = requireValidUser(authHeader);
-        String pathInTrash = request.logicalPath();
-
-        // Simple gatekeeper
-        if (!pathInTrash.startsWith(username + "/trash/")) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(Map.of("error", "Restore failed: The provided path is not a valid item inside the trash folder."));
-        }
-
-        try {
-            fileService.restoreResource(pathInTrash);
-            return ResponseEntity.ok(Map.of("message", "Resource restored successfully"));
-        } catch (IOException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", e.getMessage()));
-        }
-    }
-
-    @PutMapping("/move")
-    public ResponseEntity<?> moveResource(@RequestHeader(name = "Authorization", required = false) String authHeader, @RequestBody MoveRequest moveRequest) {
-        
-        String username = requireValidUser(authHeader);
-        String userFromPath = Paths.get(username, moveRequest.fromPath()).toString().replace("\\", "/");
-        String userToPath = Paths.get(username, moveRequest.toPath()).toString().replace("\\", "/");
-
-        // Gatekeeper (do not mess with trash)
-        String trashPrefix = username + "/trash";
-        if (userFromPath.startsWith(trashPrefix) || userToPath.startsWith(trashPrefix)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("error", "Move/Rename operations are not allowed on items in the trash. Please restore the item first."));
-        }
-
-        // Path validation (prevents '..' etc.)
-        if (moveRequest.fromPath() == null || moveRequest.toPath() == null ||
-                moveRequest.fromPath().contains("..") || moveRequest.toPath().contains("..")) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", "Invalid paths specified."));
-        }
-
-        try {
-            fileService.moveResource(userFromPath, userToPath);
-            return ResponseEntity.ok(Map.of("message", "Resource moved successfully"));
-        } catch (IOException e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Move failed: " + e.getMessage()));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new FileOperationResponse("Upload failed: " + e.getMessage(), null));
         }
     }
 
     @PostMapping("/folders/create")
-    public ResponseEntity<?> createFolder(
+    public ResponseEntity<FileOperationResponse> createFolder(
             @RequestHeader(name = "Authorization", required = false) String authHeader,
             @RequestBody CreateFolderRequest request) {
-        
+
         String username = requireValidUser(authHeader);
         String fullLogicalPath = Paths.get(username, request.logicalPath()).toString().replace("\\", "/");
 
         try {
-            fileService.createVirtualPath(fullLogicalPath);
-            return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("message", "Folder created successfully"));
+            FileOperationResponse response = fileService.createVirtualPath(fullLogicalPath);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new FileOperationResponse(e.getMessage(), null));
+        }
+    }
+
+    @PutMapping("/move")
+    public ResponseEntity<FileOperationResponse> moveResource(
+            @RequestHeader(name = "Authorization", required = false) String authHeader,
+            @RequestBody MoveRequest moveRequest) {
+
+        String username = requireValidUser(authHeader);
+        String userFromPath = Paths.get(username, moveRequest.fromPath()).toString().replace("\\", "/");
+        String userToPath = Paths.get(username, moveRequest.toPath()).toString().replace("\\", "/");
+
+        // Gatekeeper (prevents messing with trash)
+        String trashPrefix = username + "/trash";
+        if (userFromPath.startsWith(trashPrefix) || userToPath.startsWith(trashPrefix)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(new FileOperationResponse("Move/Rename operations are not allowed on items in the trash. Please restore the item first.", null));
+        }
+
+        // Path validation, e.g. checking for '..'
+        if (moveRequest.fromPath() == null || moveRequest.toPath() == null ||
+                moveRequest.fromPath().isEmpty() || moveRequest.toPath().isEmpty() ||
+                moveRequest.fromPath().contains("..") || moveRequest.toPath().contains("..")) {
+
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new FileOperationResponse("Invalid paths specified. Paths cannot be empty or contain '..'.", null));
+        }
+
+        try {
+            FileOperationResponse response = fileService.moveResource(userFromPath, userToPath);
+            return ResponseEntity.ok(response);
+        } catch (IOException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new FileOperationResponse("Move failed: " + e.getMessage(), null));
+        }
+    }
+
+    @DeleteMapping("/delete")
+    public ResponseEntity<FileOperationResponse> deleteFile(
+            @RequestHeader(name = "Authorization", required = false) String authHeader,
+            @RequestParam(name = "path") String path) {
+
+        String username = requireValidUser(authHeader);
+        String userPath = Paths.get(username, path).toString().replace("\\", "/");
+
+        try {
+            FileOperationResponse response = fileService.deleteResource(userPath);
+            return ResponseEntity.ok(response);
+        } catch (IOException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new FileOperationResponse("Delete failed: " + e.getMessage(), null));
+        }
+    }
+
+    @PostMapping("/restore")
+    public ResponseEntity<FileOperationResponse> restoreResource(
+            @RequestHeader(name = "Authorization", required = false) String authHeader,
+            @RequestBody RestoreRequest request) {
+
+        String username = requireValidUser(authHeader);
+        String pathInTrash = request.logicalPath();
+
+        if (!pathInTrash.startsWith(username + "/trash/")) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new FileOperationResponse("Restore failed: The provided path is not a valid item inside the trash folder.", null));
+        }
+
+        try {
+            FileOperationResponse response = fileService.restoreResource(pathInTrash);
+            return ResponseEntity.ok(response);
+        } catch (IOException e) {
+            if (e.getMessage().startsWith("409 CONFLICT:")) {
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(new FileOperationResponse(e.getMessage(), null));
+            }
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new FileOperationResponse(e.getMessage(), null));
+        }
+    }
+
+    @GetMapping("/download")
+    public ResponseEntity<?> download(@RequestHeader(name = "Authorization", required = false) String authHeader,
+            @RequestParam(name = "path") String path) {
+        String username = requireValidUser(authHeader);
+        String userPath = Paths.get(username, path).toString().replace("\\", "/");
+
+        try {
+            Resource resource = fileService.getResource(userPath);
+            String filename = Paths.get(userPath).getFileName().toString();
+
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                    .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                    .body(resource);
+        } catch (IOException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new FileOperationResponse(e.getMessage(), null));
         }
     }
 }
