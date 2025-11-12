@@ -1,7 +1,8 @@
-package com.nas_backend.service.monitor;
+package com.nas_backend.service.system.monitor;
 
-import com.nas_backend.model.DiskInfo;
 import java.util.List;
+
+import com.nas_backend.model.dto.DiskInfo;
 
 // Interface for system monitoring functionalities
 public interface SystemMonitor {

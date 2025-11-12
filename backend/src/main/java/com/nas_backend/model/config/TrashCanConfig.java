@@ -1,4 +1,4 @@
-package com.nas_backend.model;
+package com.nas_backend.model.config;
 
 public class TrashCanConfig {
     private boolean enabled;

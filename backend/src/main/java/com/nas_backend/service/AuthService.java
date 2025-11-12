@@ -2,8 +2,9 @@ package com.nas_backend.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.nas_backend.model.UserConfig;
-import com.nas_backend.model.UserToken;
+import com.nas_backend.model.security.UserConfig;
+import com.nas_backend.model.security.UserToken;
+import com.nas_backend.service.file.FileService;
 
 import org.springframework.stereotype.Service;
 import org.springframework.util.FileCopyUtils;

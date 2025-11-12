@@ -1,7 +1,8 @@
 package com.nas_backend.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.nas_backend.model.AppConfig;
+import com.nas_backend.model.config.AppConfig;
+
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Service;
 import org.springframework.util.FileCopyUtils;

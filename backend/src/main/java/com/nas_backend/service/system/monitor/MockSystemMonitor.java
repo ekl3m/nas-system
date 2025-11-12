@@ -1,7 +1,7 @@
-package com.nas_backend.service.monitor;
+package com.nas_backend.service.system.monitor;
 
-import com.nas_backend.model.AppConfig;
-import com.nas_backend.model.DiskInfo;
+import com.nas_backend.model.config.AppConfig;
+import com.nas_backend.model.dto.DiskInfo;
 import com.nas_backend.service.AppConfigService;
 
 import java.util.List;

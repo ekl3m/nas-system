@@ -1,4 +1,4 @@
-package com.nas_backend.model;
+package com.nas_backend.model.entity;
 
 import jakarta.persistence.*;
 import java.time.Instant;

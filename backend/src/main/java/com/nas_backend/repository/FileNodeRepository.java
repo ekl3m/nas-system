@@ -1,10 +1,11 @@
 package com.nas_backend.repository;
 
-import com.nas_backend.model.FileNode;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+
+import com.nas_backend.model.entity.FileNode;
 
 import java.time.Instant;
 import java.util.List;

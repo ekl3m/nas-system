@@ -1,9 +1,11 @@
 package com.nas_backend.config;
 
 import com.nas_backend.service.AppConfigService;
-import com.nas_backend.service.monitor.MockSystemMonitor;
-import com.nas_backend.service.monitor.RaspberrySystemMonitor;
-import com.nas_backend.service.monitor.SystemMonitor;
+import com.nas_backend.service.system.monitor.MockSystemMonitor;
+import com.nas_backend.service.system.monitor.RaspberrySystemMonitor;
+import com.nas_backend.service.system.monitor.SystemMonitor;
+import com.nas_backend.service.system.ShellService;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
@@ -16,7 +18,7 @@ public class MonitorConfig {
 
     // Factory method to create the appropriate SystemMonitor implementation
     @Bean
-    public SystemMonitor systemMonitor(AppConfigService configService) {
+    public SystemMonitor systemMonitor(AppConfigService configService, ShellService shellService) {
         String osName = System.getProperty("os.name").toLowerCase();
         String osArch = System.getProperty("os.arch").toLowerCase();
 
@@ -24,11 +26,11 @@ public class MonitorConfig {
 
         // Check if it is definitely a Raspberry Pi
         if (osName.contains("linux") && (osArch.contains("arm") || osArch.contains("aarch64"))) {
-            logger.info("OS detected as Raspberry Pi (Linux ARM/AArch64). Loading PANCERNY monitor.");
-            return new RaspberrySystemMonitor(configService);
+            logger.info("OS detected as Raspberry Pi (Linux ARM/AArch64). Loading RaspberrySystemMonitor.");
+            return new RaspberrySystemMonitor(configService, shellService);
         } else {
             // In all other cases (Mac, Windows) load the mock monitor
-            logger.warn("OS is not Linux ARM. Loading MOCK monitor for development.");
+            logger.warn("OS is not Linux ARM. Loading MockSystemMonitor for development.");
             return new MockSystemMonitor(configService); // <-- Zmienimy Mocka, żeby też brał config
         }
     }

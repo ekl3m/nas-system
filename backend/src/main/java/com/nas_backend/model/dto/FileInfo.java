@@ -1,4 +1,4 @@
-package com.nas_backend.model;
+package com.nas_backend.model.dto;
 
 public record FileInfo(
         String logicalPath, // The unqiue logical path (e.g. "admin/docs/file.txt")

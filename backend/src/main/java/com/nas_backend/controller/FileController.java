@@ -1,10 +1,14 @@
 package com.nas_backend.controller;
 
-import com.nas_backend.model.FileInfo;
-import com.nas_backend.model.FileOperationResponse;
-import com.nas_backend.model.UserConfig;
 import com.nas_backend.service.AuthService;
-import com.nas_backend.service.FileService;
+import com.nas_backend.service.file.FileService;
+import com.nas_backend.model.dto.FileInfo;
+import com.nas_backend.model.dto.FileOperationResponse;
+import com.nas_backend.model.dto.request.CreateFolderRequest;
+import com.nas_backend.model.dto.request.MoveRequest;
+import com.nas_backend.model.dto.request.RestoreRequest;
+import com.nas_backend.model.security.UserConfig;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.Resource;
@@ -27,11 +31,6 @@ public class FileController {
     private final FileService fileService;
     private final AuthService authService;
     private final Logger logger = LoggerFactory.getLogger(FileController.class);
-
-    // DTO (records) for incoming JSON requests
-    public record MoveRequest(String fromPath, String toPath) {}
-    public record RestoreRequest(String logicalPath) {}
-    public record CreateFolderRequest(String logicalPath) {}
 
     public FileController(FileService fileService, AuthService authService) {
         this.fileService = fileService;

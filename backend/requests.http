@@ -1,4 +1,4 @@
-@token = b41852a3-fb30-4ccb-86c5-896a9d3704de
+@token = bbf1069d-e1c9-4197-8a00-ac01ed304efc
 
 ### Login
 POST http://localhost:8080/api/auth/login
@@ -97,3 +97,6 @@ Authorization: Bearer {{token}}
 POST http://192.168.1.213:8080/api/auth/logout
 Authorization: Bearer {{token}}
 
+### System monitor
+GET http://192.168.1.213:8080/api/system/stats
+Authorization: Bearer {{token}}

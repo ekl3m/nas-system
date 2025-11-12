@@ -1,10 +1,12 @@
-package com.nas_backend.service;
+package com.nas_backend.service.file;
 
-import com.nas_backend.model.AppConfig;
-import com.nas_backend.model.FileInfo;
-import com.nas_backend.model.FileNode;
-import com.nas_backend.model.FileOperationResponse;
+import com.nas_backend.model.config.AppConfig;
+import com.nas_backend.model.dto.FileInfo;
+import com.nas_backend.model.dto.FileOperationResponse;
+import com.nas_backend.model.entity.FileNode;
 import com.nas_backend.repository.FileNodeRepository;
+import com.nas_backend.service.AppConfigService;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ByteArrayResource;

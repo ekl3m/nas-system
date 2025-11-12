@@ -1,9 +1,11 @@
-package com.nas_backend.service;
+package com.nas_backend.service.system;
 
-import com.nas_backend.model.AppConfig;
-import com.nas_backend.model.DiskInfo;
-import com.nas_backend.model.SystemStatsResponse;
-import com.nas_backend.service.monitor.SystemMonitor;
+import com.nas_backend.model.config.AppConfig;
+import com.nas_backend.model.dto.DiskInfo;
+import com.nas_backend.model.dto.SystemStatsResponse;
+import com.nas_backend.service.AppConfigService;
+import com.nas_backend.service.system.monitor.SystemMonitor;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
