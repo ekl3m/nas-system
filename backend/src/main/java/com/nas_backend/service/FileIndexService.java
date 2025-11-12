@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Objects;
 import java.util.List;
 
 @Service
@@ -83,6 +84,9 @@ public class FileIndexService {
 
     // Saves or updates one node in file node DB
     public FileNode addOrUpdateNode(FileNode node) {
+        // Node cannot be null
+        Objects.requireNonNull(node, "FileNode to be saved cannot be null");
+
         FileNode savedNode = fileNodeRepository.save(node);
         backupService.backupDatabase();
         return savedNode;
@@ -91,6 +95,9 @@ public class FileIndexService {
     // Saves a list of nodes in one transaction and performs ONE backup.
     @Transactional
     public List<FileNode> addOrUpdateNodes(List<FileNode> nodes) {
+        // List of nodes cannot be null
+        Objects.requireNonNull(nodes, "List of FileNodes to be saved cannot be null");
+
         List<FileNode> savedNodes = fileNodeRepository.saveAll(nodes);
         backupService.backupDatabase();
         return savedNodes;
