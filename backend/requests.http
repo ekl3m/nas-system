@@ -1,4 +1,4 @@
-@token = 7758b94d-c4bf-4fe9-8137-efe4a051c931
+@token = cf9bcd7f-58ce-4b1d-9f8a-71e7a405dd99
 
 ### Login
 POST http://localhost:8080/api/auth/login
@@ -9,12 +9,24 @@ Content-Type: application/json
   "password": "admin"
 }
 
+### Lista plików w folderze root
+GET http://localhost:8080/api/files/list
+Authorization: Bearer {{token}}
+
 ### Lista plików w folderze root/testy
 GET http://localhost:8080/api/files/list?path=testy
 Authorization: Bearer {{token}}
 
 ### Lista plików w koszu
 GET http://localhost:8080/api/files/list?path=trash
+Authorization: Bearer {{token}}
+
+### Lista ostatnio dodanych plików
+GET http://localhost:8080/api/files/recent
+Authorization: Bearer {{token}}
+
+### Lista ostatnio dodanych plików multimedialnych
+GET http://localhost:8080/api/files/recent?multimediaOnly=true
 Authorization: Bearer {{token}}
 
 ### Upload pliku
@@ -27,6 +39,18 @@ Content-Disposition: form-data; name="file"; filename="plik.txt"
 Content-Type: text/plain
 
 < /Users/sqstudio/Desktop/plik.txt
+--WebAppBoundary--
+
+### Upload pliku multimedialnego
+POST http://localhost:8080/api/files/upload?path=testy
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="file"; filename="zdjecie.png"
+Content-Type: image/png
+
+< /Users/sqstudio/Desktop/zdjecie.png
 --WebAppBoundary--
 
 ### Przenies plik

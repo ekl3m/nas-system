@@ -69,6 +69,22 @@ public class FileController {
         return ResponseEntity.ok(files);
     }
 
+    @GetMapping("/recent")
+    public ResponseEntity<List<FileInfo>> listRecentFiles(
+            @RequestHeader(name = "Authorization", required = false) String authHeader,
+            @RequestParam(name = "limit", defaultValue = "5") int limit, 
+            @RequestParam(name = "multimediaOnly", defaultValue = "false") boolean multimediaOnly) {
+
+        String username = requireValidUser(authHeader);
+
+        // Validation of limit
+        if (limit > 50) limit = 50;
+
+        List<FileInfo> files = fileService.listRecentFiles(username, limit, multimediaOnly);
+
+        return ResponseEntity.ok(files);
+    }
+
     @PostMapping("/upload")
     public ResponseEntity<FileOperationResponse> upload(
             @RequestHeader(name = "Authorization", required = false) String authHeader,

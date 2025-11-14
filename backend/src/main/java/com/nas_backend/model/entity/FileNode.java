@@ -6,7 +6,8 @@ import java.time.Instant;
 @Entity
 @Table(name = "file_nodes", indexes = {
         @Index(name = "idx_logical_path", columnList = "logicalPath", unique = true),
-        @Index(name = "idx_parent_path", columnList = "parentPath")
+        @Index(name = "idx_parent_path", columnList = "parentPath"),
+        @Index(name = "idx_mime_type", columnList = "mimeType")
 })
 public class FileNode {
 
@@ -35,6 +36,8 @@ public class FileNode {
 
     // Trash purposes
     private String restorePath; // Stores previous parent path after moving to trash
+
+    private String mimeType; // E.g. "image/jpeg"
 
     // Empty constructor is required by JPA
     public FileNode() {
@@ -82,6 +85,10 @@ public class FileNode {
         return restorePath;
     }
 
+    public String getMimeType() {
+        return mimeType;
+    }
+
     // Setters
 
     public void setId(Long id) {
@@ -122,5 +129,9 @@ public class FileNode {
 
     public void setRestorePath(String restorePath) {
         this.restorePath = restorePath;
+    }
+
+    public void setMimeType(String mimeType) {
+        this.mimeType = mimeType;
     }
 }

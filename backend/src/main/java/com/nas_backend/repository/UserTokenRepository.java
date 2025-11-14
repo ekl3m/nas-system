@@ -11,6 +11,8 @@ import java.util.Optional;
 @Repository
 public interface UserTokenRepository extends JpaRepository<UserToken, String> {
 
+    // Spring understands what these methods are supposed to do just by their names
+
     // Find token by its ID (the token string itself)
     Optional<UserToken> findByToken(String token);
 

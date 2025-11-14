@@ -55,7 +55,7 @@ public class FileIndexService {
             logger.info("Successfully restored database from backup. Starting application.");
             logger.info("Found {} nodes in restored database.", fileNodeRepository.count());
         } else {
-            // Scenario C: Neither file node DB nor backup files were found. What a pity.
+            // Scenario C: Neither file node DB nor backup files were found. What a pity!
             logger.error("FATAL: No database file and no backups found. Starting with a new, empty database. All logical file structures are lost.");
         }
     }
@@ -85,7 +85,7 @@ public class FileIndexService {
         return false;
     }
 
-    // Saves or updates one node in file node DB
+    // Saves or updates one node in file node database and performs a backup
     public FileNode addOrUpdateNode(FileNode node) {
         // Node cannot be null
         Objects.requireNonNull(node, "FileNode to be saved cannot be null");
@@ -95,7 +95,7 @@ public class FileIndexService {
         return savedNode;
     }
 
-    // Saves a list of nodes in one transaction and performs ONE backup.
+    // Saves a list of nodes in one transaction and performs one backup
     @Transactional
     public List<FileNode> addOrUpdateNodes(List<FileNode> nodes) {
         // List of nodes cannot be null

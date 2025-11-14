@@ -12,9 +12,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.data.domain.Pageable;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -109,6 +111,7 @@ public class FileService {
         nodeToSave.setSize(fileSize);
         nodeToSave.setModifiedAt(Instant.now());
         nodeToSave.setRestorePath(null); // Always null on a new upload
+        nodeToSave.setMimeType(file.getContentType());
 
         // Save, translate and return complete report
         FileNode savedNode = fileIndexService.addOrUpdateNode(nodeToSave);
@@ -290,6 +293,35 @@ public class FileService {
         List<FileNode> nodes = fileIndexService.listFiles(logicalPath);
         
         // Map FileNode to FileInfo
+        return nodes.stream()
+                .map(this::toFileInfo)
+                .collect(Collectors.toList());
+    }
+
+    public List<FileInfo> listRecentFiles(String username, int limit, boolean includeMultimediaOnly) {
+        if (includeMultimediaOnly) {
+            logger.info("Recent multimedia files request for user: {} (limit: {})", username, limit);
+        } else  {
+            logger.info("Recent files request for user: {} (limit: {})", username, limit);
+        }
+        
+        // Create a Pageable object to ask for the Top N recent files
+        Pageable topN = PageRequest.of(0, limit); // 0 means first page, limit means size
+        
+        // Define the prefix for the user
+        String prefix = username + "/";
+
+        // Prepare variable for results
+        List<FileNode> nodes;
+        
+        // Call repository method
+        if (includeMultimediaOnly) {
+            nodes = fileNodeRepository.findRecentMultimediaFiles(prefix, topN);
+        } else  {
+            nodes = fileNodeRepository.findRecentFiles(prefix, topN);
+        }
+
+        // Translate the results to safe DTOs
         return nodes.stream()
                 .map(this::toFileInfo)
                 .collect(Collectors.toList());

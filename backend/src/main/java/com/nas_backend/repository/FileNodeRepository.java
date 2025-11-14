@@ -1,5 +1,6 @@
 package com.nas_backend.repository;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -28,4 +29,11 @@ public interface FileNodeRepository extends JpaRepository<FileNode, Long> {
 
     @Query("SELECT n FROM FileNode n WHERE n.isDirectory = false AND n.parentPath NOT LIKE %:suffix")
     List<FileNode> findAllActiveFiles(@Param("suffix") String suffix);
+
+    @Query("SELECT n FROM FileNode n WHERE n.isDirectory = false AND n.parentPath NOT LIKE '%/trash' AND n.logicalPath LIKE :prefix% ORDER BY n.createdAt DESC")
+    List<FileNode> findRecentFiles(@Param("prefix") String logicalPathPrefix, Pageable pageable);
+
+    @Query("SELECT n FROM FileNode n WHERE n.isDirectory = false " + "AND n.parentPath NOT LIKE '%/trash' " + "AND n.logicalPath LIKE :prefix% " +
+            "AND (n.mimeType LIKE 'image/%' OR n.mimeType LIKE 'video/%') " + "ORDER BY n.createdAt DESC")
+    List<FileNode> findRecentMultimediaFiles(@Param("prefix") String logicalPathPrefix, Pageable pageable);
 }
