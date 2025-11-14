@@ -2,11 +2,13 @@ package com.nas_backend.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nas_backend.model.entity.UserToken;
+import com.nas_backend.repository.UserTokenRepository;
 import com.nas_backend.model.security.UserConfig;
-import com.nas_backend.model.security.UserToken;
 import com.nas_backend.service.file.FileService;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.FileCopyUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,15 +34,16 @@ public class AuthService {
     private static final String USERS_TEMPLATE_PATH = "users.json.template";
 
     private final Map<String, UserConfig> users = new ConcurrentHashMap<>(); // username -> UserConfig (full user data)
-    private final Map<String, UserToken> activeTokens = new ConcurrentHashMap<>(); // token -> UserToken (login session)
     private final AppConfigService configService;
     private final FileService fileService;
+    private final UserTokenRepository userTokenRepository;
 
     private final ObjectMapper mapper = new ObjectMapper();
 
-    public AuthService(AppConfigService configService, FileService fileService) {
+    public AuthService(AppConfigService configService, FileService fileService, UserTokenRepository userTokenRepository) {
         this.configService = configService;
         this.fileService = fileService;
+        this.userTokenRepository = userTokenRepository;
     }
 
     private long getTokenTtlSeconds() {
@@ -66,7 +69,7 @@ public class AuthService {
 
             for (UserConfig u : userList) {
                 if (u.getUsername() == null || u.getUsername().startsWith(".")) {
-                    // Critical error. System admin must correct users.json.
+                    // Critical error. System admin must correct users.json
                     logger.error("FATAL: Invalid username found in users.json: '{}'. Usernames cannot be null or start with a dot.", u.getUsername());
                     throw new RuntimeException("Invalid username in users.json. Usernames cannot be null or start with a dot.");
                 }
@@ -79,47 +82,89 @@ public class AuthService {
         }
     }
 
-    private void createDefaultUsersFile(File usersFile) throws IOException {
-        usersFile.getParentFile().mkdirs();
-        try (InputStream in = getClass().getClassLoader().getResourceAsStream(USERS_TEMPLATE_PATH)) {
-            if (in == null) {
-                throw new IOException("FATAL: users.json.template not found in resources!");
-            }
-            byte[] templateData = FileCopyUtils.copyToByteArray(in);
-            FileCopyUtils.copy(templateData, usersFile);
-            System.out.println("Default users file created at: " + usersFile.getAbsolutePath());
-            throw new RuntimeException("Default users.json has been created. Please define at least one user before starting the application.");
-        }
-    }
+    // Service methods
 
+    @Transactional
     public String login(String username, String password) {
         UserConfig user = users.get(username);
         if (user == null || !user.getPassword().equals(password)) {
             throw new RuntimeException("Invalid username or password");
         }
 
-        // Ensure user's virtual root directory exists
+        // Make sure user virtual root and physical storage paths exist
         try {
             fileService.createVirtualPath(username);
             logger.info("Verified virtual root for user: {}", username);
         } catch (Exception e) {
             logger.error("Failed to create/verify root virtual folder for user: {}", username, e);
         }
-
-        // Ensure user's physical root directory exists
         try {
             ensureUserStoragePaths(username);
         } catch (IOException e) {
             logger.warn("Could not create all physical storage paths for user: {}", username, e);
         }
+        
+        // Clear out old tokens if any exist
+        List<UserToken> oldTokens = userTokenRepository.findByUsername(username);
+        if (!oldTokens.isEmpty()) {
+            logger.info("Auth: Clearing {} old, stale tokens for user: {}", oldTokens.size(), username);
+            userTokenRepository.deleteAll(oldTokens);
+        }
 
-        // Log out previous sessions
-        activeTokens.values().removeIf(t -> t.getUsername().equals(username));
-
-        String token = UUID.randomUUID().toString();
-        activeTokens.put(token, new UserToken(username, token, getTokenTtlSeconds()));
-        return token;
+        // Create a new token
+        String tokenString = UUID.randomUUID().toString();
+        UserToken newToken = new UserToken(username, tokenString, getTokenTtlSeconds());
+        
+        // Save token to DB
+        userTokenRepository.save(newToken);
+        logger.info("--- LOGIN --- Token stored in DB for user: {}", username);
+        return tokenString;
     }
+
+    @Transactional
+    public void logout(String token) {
+        if (token != null) {
+            // Simply remove from the database (token is @Id)
+            userTokenRepository.deleteById(token);
+            logger.info("Auth: User logged out, token {} deleted from DB.", token);
+        }
+    }
+
+    @Transactional
+    public UserConfig getUserFromToken(String token) {
+        if (token == null) {
+            return null;
+        }
+
+        // Find in the database
+        Optional<UserToken> userTokenOpt = userTokenRepository.findByToken(token);
+
+        if (userTokenOpt.isEmpty()) {
+            logger.warn("Auth: Invalid token presented: {}", token);
+            return null; // Did not find user using this token
+        }
+
+        UserToken userToken = userTokenOpt.get();
+
+        // Check whether token is expired
+        if (userToken.isExpired()) {
+            logger.warn("Auth: User presented expired token. Deleting from DB.");
+            userTokenRepository.delete(userToken); // If token is expired, remove from DB
+            return null;
+        }
+
+        // If token is valid, return the user
+        return users.get(userToken.getUsername());
+    }
+
+    public String extractToken(String authHeader) {
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            return null;
+        }
+        return authHeader.substring(7);
+    }
+
+    // Helper methods
 
     private void ensureUserStoragePaths(String username) throws IOException {
         List<String> storagePaths = configService.getConfig().getStorage().getPaths();
@@ -142,28 +187,16 @@ public class AuthService {
         }
     }
 
-    public void logout(String token) {
-        if (token != null) {
-            activeTokens.remove(token);
+    private void createDefaultUsersFile(File usersFile) throws IOException {
+        usersFile.getParentFile().mkdirs();
+        try (InputStream in = getClass().getClassLoader().getResourceAsStream(USERS_TEMPLATE_PATH)) {
+            if (in == null) {
+                throw new IOException("FATAL: users.json.template not found in resources!");
+            }
+            byte[] templateData = FileCopyUtils.copyToByteArray(in);
+            FileCopyUtils.copy(templateData, usersFile);
+            System.out.println("Default users file created at: " + usersFile.getAbsolutePath());
+            throw new RuntimeException("Default users.json has been created. Please define at least one user before starting the application.");
         }
-    }
-
-    public UserConfig getUserFromToken(String token) {
-        UserToken userToken = activeTokens.get(token);
-        if (userToken == null) {
-            return null;
-        }
-        if (userToken.isExpired()) {
-            activeTokens.remove(token);
-            return null;
-        }
-        return users.get(userToken.getUsername());
-    }
-
-    public String extractToken(String authHeader) {
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            return null;
-        }
-        return authHeader.substring(7);
     }
 }

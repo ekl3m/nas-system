@@ -2,7 +2,9 @@ package com.nas_backend.service.system;
 
 import com.nas_backend.model.config.AppConfig;
 import com.nas_backend.model.entity.FileNode;
+import com.nas_backend.model.entity.UserToken;
 import com.nas_backend.repository.FileNodeRepository;
+import com.nas_backend.repository.UserTokenRepository;
 import com.nas_backend.service.AppConfigService;
 
 import org.slf4j.Logger;
@@ -26,10 +28,12 @@ public class GarbageCollectorService {
     private static final Logger logger = LoggerFactory.getLogger(GarbageCollectorService.class);
 
     private final FileNodeRepository fileNodeRepository;
+    private final UserTokenRepository userTokenRepository;
     private final AppConfigService configService;
 
-    public GarbageCollectorService(FileNodeRepository fileNodeRepository, AppConfigService configService) {
+    public GarbageCollectorService(FileNodeRepository fileNodeRepository, UserTokenRepository userTokenRepository, AppConfigService configService) {
         this.fileNodeRepository = fileNodeRepository;
+        this.userTokenRepository = userTokenRepository;
         this.configService = configService;
     }
 
@@ -38,12 +42,12 @@ public class GarbageCollectorService {
     public void emptyTrashTask() {
         AppConfig config = configService.getConfig();
         if (!config.getTrashCan().isEnabled()) {
-            logger.info("Garbage Collector: Trash can is disabled, skipping task.");
+            logger.info("Garbage Collector (Trash): Trash can is disabled, skipping task.");
             return;
         }
 
         int retentionDays = config.getTrashCan().getRetentionDays();
-        logger.info("Garbage Collector: Running task to clean items older than {} days...", retentionDays);
+        logger.info("Garbage Collector (Trash): Running task to clean items older than {} days...", retentionDays);
 
         // Find expired roots in trash
         Instant cutoffDate = Instant.now().minus(retentionDays, ChronoUnit.DAYS);
@@ -52,14 +56,14 @@ public class GarbageCollectorService {
                 .findByParentPathEndingWithAndModifiedAtBefore("/trash", cutoffDate);
 
         if (expiredRoots.isEmpty()) {
-            logger.info("Garbage Collector: No expired root items found in trash. Job done.");
+            logger.info("Garbage Collector (Trash): No expired root items found in trash. Job done.");
             return;
         }
 
         int totalDeletedFiles = 0;
         int totalDeletedNodes = 0;
 
-        logger.info("Garbage Collector: Found {} expired root items to delete.", expiredRoots.size());
+        logger.info("Garbage Collector (Trash): Found {} expired root items to delete.", expiredRoots.size());
 
         // For each root, delete its branches (This logic was already perfect)
         for (FileNode root : expiredRoots) {
@@ -80,7 +84,7 @@ public class GarbageCollectorService {
                             Files.delete(file.toPath());
                             deletedFiles++;
                         } catch (IOException e) {
-                            logger.error("Garbage Collector: Failed to delete physical file: {}",
+                            logger.error("Garbage Collector (Trash): Failed to delete physical file: {}",
                                     node.getPhysicalPath(), e);
                         }
                     }
@@ -90,13 +94,13 @@ public class GarbageCollectorService {
                 deletedNodes++;
             }
 
-            logger.info("Garbage Collector: Deleted item '{}' ({} nodes, {} physical files).", root.getFileName(),
+            logger.info("Garbage Collector (Trash): Deleted item '{}' ({} nodes, {} physical files).", root.getFileName(),
                     deletedNodes, deletedFiles);
             totalDeletedFiles += deletedFiles;
             totalDeletedNodes += deletedNodes;
         }
 
-        logger.info("Garbage Collector: Task finished. Permanently deleted {} total nodes and {} total physical files.",
+        logger.info("Garbage Collector (Trash): Task finished. Permanently deleted {} total nodes and {} total physical files.",
                 totalDeletedNodes, totalDeletedFiles);
     }
 
@@ -128,5 +132,18 @@ public class GarbageCollectorService {
         }
 
         logger.info("Garbage Collector (Orphans): Task finished. Found and removed {} orphan entries.", orphanCount);
+    }
+
+    @Scheduled(cron = "0 10 3 * * ?") // 3:10 AM daily
+    @Transactional
+    public void cleanExpiredTokens() {
+        logger.info("Garbage Collector (Tokens): Running scheduled task to clean expired tokens...");
+        List<UserToken> expired = userTokenRepository.findByExpirationTimeBefore(Instant.now());
+        if (!expired.isEmpty()) {
+            userTokenRepository.deleteAll(expired);
+            logger.info("Garbage Collector (Tokens): Cleaned up {} expired tokens.", expired.size());
+        } else {
+            logger.info("Garbage Collector (Tokens): No expired tokens found. Job done.");
+        }
     }
 }
