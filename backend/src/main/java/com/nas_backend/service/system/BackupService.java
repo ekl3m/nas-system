@@ -23,9 +23,11 @@ public class BackupService {
     private static final String DATA_DIR_NAME = "data";
 
     private final AppConfigService configService;
+    private final EmailService emailService;
 
-    public BackupService(AppConfigService configService) {
+    public BackupService(AppConfigService configService, EmailService emailService) {
         this.configService = configService;
+        this.emailService = emailService;
     }
 
 
@@ -51,15 +53,30 @@ public class BackupService {
             return;
 
         logger.info("[ASYNC-BACKUP] Performing database backup to all storage drives...");
+        int successCount = 0;
+        int failCount = 0;
+
         for (String drive : storagePaths) {
             try {
                 Path destination = Paths.get(drive, ".nas.db.backup");
 
                 Files.copy(source, destination, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
                 logger.info("[ASYNC-BACKUP] Backup successful to: {}", drive);
+                successCount++;
             } catch (IOException e) {
                 logger.error("[ASYNC-BACKUP] Failed to backup database to drive: {}", drive, e);
+                failCount++;
             }
+        }
+
+        if (failCount > 0) {
+            emailService.sendSystemErrorEmail(
+                "Database backup FAILED.\n" +
+                "Successful copies: " + successCount + "\n" +
+                "Failed copies: " + failCount + "\n" +
+                "Check system logs for details.",
+                "System"
+            );
         }
     }
 }

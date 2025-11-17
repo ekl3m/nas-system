@@ -1,7 +1,17 @@
-@token = cf9bcd7f-58ce-4b1d-9f8a-71e7a405dd99
+#############################################################
+#                   CONFIGURATION
+#############################################################
+@hostname = http://localhost:8080
+@rpi_hostname = http://192.168.1.213:8080
 
-### Login
-POST http://localhost:8080/api/auth/login
+
+#############################################################
+#               LOCAL TESTS (MACOS / IDE)
+#############################################################
+
+### LOGIN (LOCALLY)
+# @name login_local
+POST {{hostname}}/api/auth/login
 Content-Type: application/json
 
 {
@@ -9,29 +19,31 @@ Content-Type: application/json
   "password": "admin"
 }
 
-### Lista plików w folderze root
-GET http://localhost:8080/api/files/list
-Authorization: Bearer {{token}}
+### List root folder (admin)
+GET {{hostname}}/api/files/list
+Authorization: Bearer {{login_local.response.body.token}}
 
-### Lista plików w folderze root/testy
-GET http://localhost:8080/api/files/list?path=testy
-Authorization: Bearer {{token}}
+### List subfolder (admin/testy)
+GET {{hostname}}/api/files/list?path=testy
+Authorization: Bearer {{login_local.response.body.token}}
 
-### Lista plików w koszu
-GET http://localhost:8080/api/files/list?path=trash
-Authorization: Bearer {{token}}
+### List trash (admin/trash)
+GET {{hostname}}/api/files/list?path=trash
+Authorization: Bearer {{login_local.response.body.token}}
 
-### Lista ostatnio dodanych plików
-GET http://localhost:8080/api/files/recent
-Authorization: Bearer {{token}}
+### Create a new virtual folder (admin/nowy_folder)
+# @name create_folder
+POST {{hostname}}/api/files/folders/create
+Authorization: Bearer {{login_local.response.body.token}}
+Content-Type: application/json
 
-### Lista ostatnio dodanych plików multimedialnych
-GET http://localhost:8080/api/files/recent?multimediaOnly=true
-Authorization: Bearer {{token}}
+{
+    "logicalPath": "nowy_folder"
+}
 
-### Upload pliku
-POST http://localhost:8080/api/files/upload?path=testy
-Authorization: Bearer {{token}}
+### Upload a text file (to admin/testy)
+POST {{hostname}}/api/files/upload?path=testy
+Authorization: Bearer {{login_local.response.body.token}}
 Content-Type: multipart/form-data; boundary=WebAppBoundary
 
 --WebAppBoundary
@@ -41,9 +53,9 @@ Content-Type: text/plain
 < /Users/sqstudio/Desktop/plik.txt
 --WebAppBoundary--
 
-### Upload pliku multimedialnego
-POST http://localhost:8080/api/files/upload?path=testy
-Authorization: Bearer {{token}}
+### Upload a multimedia file (to admin/testy)
+POST {{hostname}}/api/files/upload?path=testy
+Authorization: Bearer {{login_local.response.body.token}}
 Content-Type: multipart/form-data; boundary=WebAppBoundary
 
 --WebAppBoundary
@@ -53,10 +65,21 @@ Content-Type: image/png
 < /Users/sqstudio/Desktop/zdjecie.png
 --WebAppBoundary--
 
-### Przenies plik
+### Upload a file that is too big (to admin/testy)
+POST {{hostname}}/api/files/upload?path=testy
+Authorization: Bearer {{login_local.response.body.token}}
+Content-Type: multipart/form-data; boundary=WebAppBoundary
 
-PUT http://localhost:8080/api/files/move
-Authorization: Bearer {{token}}
+--WebAppBoundary
+Content-Disposition: form-data; name="file"; filename="mock.png"
+Content-Type: image/png
+
+< /Users/sqstudio/Desktop/mock.png
+--WebAppBoundary--
+
+### Move/Rename a file (from testy/plik.txt to plik.txt)
+PUT {{hostname}}/api/files/move
+Authorization: Bearer {{login_local.response.body.token}}
 Content-Type: application/json
 
 {
@@ -64,28 +87,43 @@ Content-Type: application/json
     "toPath": "plik.txt"
 }
 
-### Usuń plik
-DELETE http://localhost:8080/api/files/delete?path=testy/plik.txt
-Authorization: Bearer {{token}}
+### Delete a file (to trash)
+DELETE {{hostname}}/api/files/delete?path=plik.txt
+Authorization: Bearer {{login_local.response.body.token}}
+
+### Restore a file from trash
+POST {{hostname}}/api/files/restore
+Authorization: Bearer {{login_local.response.body.token}}
+Content-Type: application/json
+
+{
+    "logicalPath": "admin/trash/plik.txt"
+}
+
+### Get recent files
+GET {{hostname}}/api/files/recent
+Authorization: Bearer {{login_local.response.body.token}}
+
+### Get recent MEDIA files
+GET {{hostname}}/api/files/recent?multimediaOnly=true
+Authorization: Bearer {{login_local.response.body.token}}
+
+### Get system stats (Mocked on Mac)
+GET {{hostname}}/api/system/stats
+Authorization: Bearer {{login_local.response.body.token}}
 
 ### Logout
-POST http://localhost:8080/api/auth/logout
-Authorization: Bearer {{token}}
-
-### System monitor
-GET http://localhost:8080/api/system/stats
-Authorization: Bearer {{token}}
+POST {{hostname}}/api/auth/logout
+Authorization: Bearer {{login_local.response.body.token}}
 
 
-#########################
+#############################################################
+#               REMOTE TESTS (RASPBERRY PI)
+#############################################################
 
-# RASPBERRY TESTS
-
-#########################
-
-
-### Login
-POST http://192.168.1.213:8080/api/auth/login
+### LOGIN (ON RASPBERRY PI)
+# @name login_rpi
+POST {{rpi_hostname}}/api/auth/login
 Content-Type: application/json
 
 {
@@ -93,17 +131,30 @@ Content-Type: application/json
   "password": "admin"
 }
 
-### Lista plików
-GET http://192.168.1.213:8080/api/files/list?path=testy
-Authorization: Bearer {{token}}
+### List root folder (admin)
+GET {{rpi_hostname}}/api/files/list
+Authorization: Bearer {{login_rpi.response.body.token}}
 
-### Lista plików w koszu
-GET http://192.168.1.213:8080/api/files/list?path=trash
-Authorization: Bearer {{token}}
+### List subfolder (admin/testy)
+GET {{rpi_hostname}}/api/files/list?path=testy
+Authorization: Bearer {{login_rpi.response.body.token}}
 
-### Upload pliku
-POST http://192.168.1.213:8080/api/files/upload?path=testy
-Authorization: Bearer {{token}}
+### List trash (admin/trash)
+GET {{rpi_hostname}}/api/files/list?path=trash
+Authorization: Bearer {{login_rpi.response.body.token}}
+
+### Create folder on RPi (admin/testy)
+POST {{rpi_hostname}}/api/files/folders/create
+Authorization: Bearer {{login_rpi.response.body.token}}
+Content-Type: application/json
+
+{
+    "logicalPath": "testy"
+}
+
+### Upload a text file to RPi (to admin/testy)
+POST {{rpi_hostname}}/api/files/upload?path=testy
+Authorization: Bearer {{login_rpi.response.body.token}}
 Content-Type: multipart/form-data; boundary=WebAppBoundary
 
 --WebAppBoundary
@@ -113,22 +164,61 @@ Content-Type: text/plain
 < /Users/sqstudio/Desktop/plik.txt
 --WebAppBoundary--
 
-### Usuń plik
-DELETE http://192.168.1.213:8080/api/files/delete?path=testy/plik.txt
-Authorization: Bearer {{token}}
+### Upload a multimedia file to RPi (to admin/testy)
+POST {{rpi_hostname}}/api/files/upload?path=testy
+Authorization: Bearer {{login_rpi.response.body.token}}
+Content-Type: multipart/form-data; boundary=WebAppBoundary
 
-### Logout
-POST http://192.168.1.213:8080/api/auth/logout
-Authorization: Bearer {{token}}
+--WebAppBoundary
+Content-Disposition: form-data; name="file"; filename="zdjecie.png"
+Content-Type: image/png
 
-### System monitor
-GET http://192.168.1.213:8080/api/system/stats
-Authorization: Bearer {{token}}
+< /Users/sqstudio/Desktop/zdjecie.png
+--WebAppBoundary--
 
-### System reboot
-POST http://192.168.1.213:8080/api/system/reboot
-Authorization: Bearer {{token}}
+### Move/Rename file on RPi
+PUT {{rpi_hostname}}/api/files/move
+Authorization: Bearer {{login_rpi.response.body.token}}
+Content-Type: application/json
 
-### System shutdown
-POST http://192.168.1.213:8080/api/system/shutdown
-Authorization: Bearer {{token}}
+{
+    "fromPath": "testy/plik.txt",
+    "toPath": "plik.txt"
+}
+
+### Delete file on RPi (to trash)
+DELETE {{rpi_hostname}}/api/files/delete?path=plik.txt
+Authorization: Bearer {{login_rpi.response.body.token}}
+
+### Restore file on RPi
+POST {{rpi_hostname}}/api/files/restore
+Authorization: Bearer {{login_rpi.response.body.token}}
+Content-Type: application/json
+
+{
+    "logicalPath": "admin/trash/plik.txt"
+}
+
+### Get recent files on RPi
+GET {{rpi_hostname}}/api/files/recent
+Authorization: Bearer {{login_rpi.response.body.token}}
+
+### Get recent MEDIA files on RPi
+GET {{rpi_hostname}}/api/files/recent?multimediaOnly=true
+Authorization: Bearer {{login_rpi.response.body.token}}
+
+### Get system stats (Real data from RPi)
+GET {{rpi_hostname}}/api/system/stats
+Authorization: Bearer {{login_rpi.response.body.token}}
+
+### Logout from RPi
+POST {{rpi_hostname}}/api/auth/logout
+Authorization: Bearer {{login_rpi.response.body.token}}
+
+### (RED BUTTON #1) Reboot RPi
+POST {{rpi_hostname}}/api/system/reboot
+Authorization: Bearer {{login_rpi.response.body.token}}
+
+### (RED BUTTON #2) Shutdown RPi
+POST {{rpi_hostname}}/api/system/shutdown
+Authorization: Bearer {{login_rpi.response.body.token}}

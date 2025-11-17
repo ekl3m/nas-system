@@ -2,6 +2,8 @@ package com.nas_backend.controller;
 
 import com.nas_backend.service.AuthService;
 import com.nas_backend.service.file.FileService;
+import com.nas_backend.service.system.EmailService;
+import com.nas_backend.exception.FileValidationException;
 import com.nas_backend.model.dto.FileInfo;
 import com.nas_backend.model.dto.FileOperationResponse;
 import com.nas_backend.model.dto.request.CreateFolderRequest;
@@ -30,11 +32,13 @@ public class FileController {
 
     private final FileService fileService;
     private final AuthService authService;
+    private final EmailService emailService;
     private final Logger logger = LoggerFactory.getLogger(FileController.class);
 
-    public FileController(FileService fileService, AuthService authService) {
+    public FileController(FileService fileService, AuthService authService, EmailService emailService) {
         this.fileService = fileService;
         this.authService = authService;
+        this.emailService = emailService;
     }
 
     private String requireValidUser(String authHeader) {
@@ -97,7 +101,17 @@ public class FileController {
         try {
             FileOperationResponse response = fileService.uploadFile(userPath, file);
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (FileValidationException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new FileOperationResponse("Upload failed: " + e.getMessage(), null));
         } catch (IOException e) {
+            emailService.sendSystemErrorEmail(
+                "Upload failed for user '" + username + "'.\n" +
+                "Target path: " + userPath + "\n" +
+                "Filename: " + file.getOriginalFilename() + "\n\n" +
+                "Error: " + e.getMessage(),
+                username
+            );
+
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new FileOperationResponse("Upload failed: " + e.getMessage(), null));
         }
     }
@@ -113,8 +127,17 @@ public class FileController {
         try {
             FileOperationResponse response = fileService.createVirtualPath(fullLogicalPath);
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (FileValidationException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new FileOperationResponse("Create folder failed: " + e.getMessage(), null));
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new FileOperationResponse(e.getMessage(), null));
+            emailService.sendSystemErrorEmail(
+                "Critical folder creation failed for user '" + username + "'.\n" +
+                "Target path: " + fullLogicalPath + "\n\n" +
+                "Error: " + e.getMessage(),
+                username
+            );
+
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new FileOperationResponse("Create folder failed: " + e.getMessage(), null));
         }
     }
 
@@ -146,7 +169,17 @@ public class FileController {
         try {
             FileOperationResponse response = fileService.moveResource(userFromPath, userToPath);
             return ResponseEntity.ok(response);
+        } catch (FileValidationException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new FileOperationResponse("Move failed: " + e.getMessage(), null));
         } catch (IOException e) {
+            emailService.sendSystemErrorEmail(
+                "Critical move operation failed for user '" + username + "'.\n" +
+                "From: " + userFromPath + "\n" +
+                "To: " + userToPath + "\n\n" +
+                "Error: " + e.getMessage(),
+                username
+            );
+
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new FileOperationResponse("Move failed: " + e.getMessage(), null));
         }
     }
@@ -162,7 +195,22 @@ public class FileController {
         try {
             FileOperationResponse response = fileService.deleteResource(userPath);
             return ResponseEntity.ok(response);
+        } catch (FileValidationException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new FileOperationResponse("Delete failed: " + e.getMessage(), null));
         } catch (IOException e) {
+            if (e.getMessage().contains("not found in index")) {
+                // Specific handling for "not found" scenario
+                logger.warn("Delete REJECTED: {}", e.getMessage());
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new FileOperationResponse("Delete failed: " + e.getMessage(), null));
+            }
+
+            emailService.sendSystemErrorEmail(
+                "Critical delete operation failed for user '" + username + "'.\n" +
+                "Target path: " + userPath + "\n\n" +
+                "Error: " + e.getMessage(),
+                username
+            );
+
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new FileOperationResponse("Delete failed: " + e.getMessage(), null));
         }
     }
@@ -183,11 +231,25 @@ public class FileController {
         try {
             FileOperationResponse response = fileService.restoreResource(pathInTrash);
             return ResponseEntity.ok(response);
+        } catch (FileValidationException e) { 
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new FileOperationResponse("Restore failed: " + e.getMessage(), null));
         } catch (IOException e) {
-            if (e.getMessage().startsWith("409 CONFLICT:")) {
-                return ResponseEntity.status(HttpStatus.CONFLICT).body(new FileOperationResponse(e.getMessage(), null));
+            if (e.getMessage().startsWith("409 CONFLICT:") || 
+                e.getMessage().contains("not a valid trash item") ||
+                e.getMessage().contains("not found in trash")) {
+                
+                HttpStatus status = e.getMessage().startsWith("409") ? HttpStatus.CONFLICT : HttpStatus.BAD_REQUEST;
+                return ResponseEntity.status(status).body(new FileOperationResponse(e.getMessage(), null));
             }
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new FileOperationResponse(e.getMessage(), null));
+
+            emailService.sendSystemErrorEmail(
+                "Critical restore operation failed for user '" + username + "'.\n" +
+                "Target path: " + pathInTrash + "\n\n" +
+                "Error: " + e.getMessage(),
+                username
+            );
+
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new FileOperationResponse(e.getMessage(), null));
         }
     }
 

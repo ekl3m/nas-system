@@ -1,5 +1,6 @@
 package com.nas_backend.service.file;
 
+import com.nas_backend.exception.FileValidationException;
 import com.nas_backend.model.config.AppConfig;
 import com.nas_backend.model.dto.FileInfo;
 import com.nas_backend.model.dto.FileOperationResponse;
@@ -52,14 +53,14 @@ public class FileService {
     // Main methods (engines)
 
     @Transactional
-    public FileOperationResponse uploadFile(String logicalParentPath, MultipartFile file) throws IOException {
+    public FileOperationResponse uploadFile(String logicalParentPath, MultipartFile file) throws IOException, FileValidationException{
         logger.info("Upload request for '{}' in logical path '{}'", file.getOriginalFilename(), logicalParentPath);
 
         // Do not allow user to create files with empty names or names starting with a dot
         String originalFileName = file.getOriginalFilename();
         if (originalFileName == null || originalFileName.isEmpty() || originalFileName.startsWith(".")) {
             logger.warn("Upload REJECTED: Filename is null, empty, or starts with a dot: {}", originalFileName);
-            throw new IOException("Invalid filename. Files cannot be hidden or have no name.");
+            throw new FileValidationException("Invalid filename. Files cannot be hidden or have no name.");
         }
 
         // Make sure that parent path exists in file node database
@@ -70,7 +71,7 @@ public class FileService {
 
         // Size validation
         if (fileSize > (long) config.getServer().getMaxUploadSizeMB() * 1024 * 1024) {
-            throw new IOException("File size exceeds the maximum upload limit.");
+            throw new FileValidationException("File size exceeds the maximum upload limit.");
         }
 
         // Find a unique filename in the target folder
@@ -144,7 +145,7 @@ public class FileService {
     }
 
     @Transactional
-    public FileOperationResponse deleteResource(String logicalPath) throws IOException {
+    public FileOperationResponse deleteResource(String logicalPath) throws IOException, FileValidationException {
         AppConfig config = configService.getConfig();
         logger.warn("Delete request for logical path: {}", logicalPath);
 
@@ -179,7 +180,7 @@ public class FileService {
     }
 
     @Transactional
-    public FileOperationResponse restoreResource(String logicalPathInTrash) throws IOException {
+    public FileOperationResponse restoreResource(String logicalPathInTrash) throws IOException, FileValidationException {
         logger.info("Restore request for resource: {}", logicalPathInTrash);
 
         // Find the node and its restore path
@@ -212,14 +213,14 @@ public class FileService {
     }
 
     @Transactional
-    public FileOperationResponse moveResource(String oldLogicalPath, String newLogicalPath) throws IOException {
+    public FileOperationResponse moveResource(String oldLogicalPath, String newLogicalPath) throws IOException, FileValidationException {
         logger.info("Universal Smart Move: from [{}] to [{}]", oldLogicalPath, newLogicalPath);
 
         // Do not allow user to move resources to destinations starting with a dot
         String finalName = Paths.get(newLogicalPath).getFileName().toString();
         if (finalName.startsWith(".")) {
             logger.warn("Move REJECTED: Destination name starts with a dot. Path: {}", newLogicalPath);
-            throw new IOException("Invalid destination name. Files and folders cannot start with a dot.");
+            throw new FileValidationException("Invalid destination name. Files and folders cannot start with a dot.");
         }
 
         // Validate source
@@ -257,8 +258,7 @@ public class FileService {
         for (FileNode node : nodesToMove) {
             String oldSubPath = node.getLogicalPath().substring(oldLogicalPath.length());
             String calculatedNewLogicalPath = finalLogicalPath + oldSubPath;
-            String calculatedNewParentPath = Paths.get(calculatedNewLogicalPath).getParent().toString().replace("\\",
-                    "/");
+            String calculatedNewParentPath = Paths.get(calculatedNewLogicalPath).getParent().toString().replace("\\", "/");
 
             node.setLogicalPath(calculatedNewLogicalPath);
             node.setParentPath(calculatedNewParentPath);
@@ -328,16 +328,16 @@ public class FileService {
     }
 
     @Transactional
-    public FileOperationResponse createVirtualPath(String logicalPath) throws IOException {
+    public FileOperationResponse createVirtualPath(String logicalPath) throws IOException, FileValidationException {
         // Do not allow user to create paths with empty names, containing multiple dots or starting with a dot
         if (logicalPath == null || logicalPath.contains("..") || logicalPath.isBlank()) {
-            throw new IOException("Invalid path. Path cannot be null, empty, or contain '..'.");
+            throw new FileValidationException("Invalid path. Path cannot be null, empty, or contain '..'.");
         }
         String[] segments = logicalPath.split("/");
         for (String segment : segments) {
             if (segment.startsWith(".")) {
                 logger.warn("Create virtual path REJECTED: Path segment starts with a dot. Path: {}", logicalPath);
-                throw new IOException("Invalid path name. Folders or subfolders cannot start with a dot.");
+                throw new FileValidationException("Invalid path name. Folders or subfolders cannot start with a dot.");
             }
         }
 
@@ -391,8 +391,8 @@ public class FileService {
                 node.getFileName(),
                 node.isDirectory(),
                 node.getSize(),
-                node.getCreatedAt().toString(),
-                node.getModifiedAt().toString());
+                node.getCreatedAt() != null ? node.getCreatedAt().toString() : "N/A",
+                node.getModifiedAt() != null ? node.getModifiedAt().toString() : "N/A");
     }
 
     // Helper methods
@@ -429,7 +429,7 @@ public class FileService {
     }
 
     @Transactional
-    protected void deleteRecursively(String logicalPath) throws IOException {
+    protected void deleteRecursively(String logicalPath) throws IOException, FileValidationException {
         List<FileNode> nodesToDelete = fileNodeRepository.findByLogicalPathStartingWith(logicalPath);
 
         for (FileNode node : nodesToDelete) {
@@ -485,7 +485,7 @@ public class FileService {
         return new ByteArrayResource(baos.toByteArray());
     }
 
-    private String findBestStoragePath(long requiredSpace) throws IOException {
+    private String findBestStoragePath(long requiredSpace) throws IOException, FileValidationException {
         List<String> paths = configService.getConfig().getStorage().getPaths();
         if (paths.isEmpty())
             throw new IOException("No storage paths configured!");
@@ -502,7 +502,7 @@ public class FileService {
             }
         }
         if (bestPath == null || maxFreeSpace < requiredSpace) {
-            throw new IOException("Not enough space on any storage device.");
+            throw new FileValidationException("Not enough space on any storage device.");
         }
         return bestPath;
     }

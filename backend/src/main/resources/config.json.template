@@ -5,7 +5,9 @@
         "tokenTTL": 3600,
         "maxUploadSizeMB": 5000,
         "logLevel": "DEBUG",
-        "maxConcurrentUploads": 5
+        "maxConcurrentUploads": 5,
+        "enableEmailNotifications": false,
+        "adminEmail": "admin@example.com"
     },
     "storage": {
         "paths": [

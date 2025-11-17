@@ -7,6 +7,8 @@ public class ServerConfig {
     private int maxUploadSizeMB;
     private String logLevel;
     private int maxConcurrentUploads;
+    private boolean enableEmailNotifications;
+    private String adminEmail;
 
     // Empty constructor is required by Jackson
     public ServerConfig() {
@@ -38,6 +40,14 @@ public class ServerConfig {
         return maxConcurrentUploads;
     }
 
+    public boolean isEnableEmailNotifications() {
+        return enableEmailNotifications;
+    }
+
+    public String getAdminEmail() {
+        return adminEmail;
+    }
+
     // Setters
 
     public void setHostname(String hostname) {
@@ -62,5 +72,13 @@ public class ServerConfig {
 
     public void setMaxConcurrentUploads(int maxConcurrentUploads) {
         this.maxConcurrentUploads = maxConcurrentUploads;
+    }
+
+    public void setEnableEmailNotifications(boolean enableEmailNotifications) {
+        this.enableEmailNotifications = enableEmailNotifications;
+    }
+
+    public void setAdminEmail(String adminEmail) {
+        this.adminEmail = adminEmail;
     }
 }
