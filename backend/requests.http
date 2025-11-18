@@ -116,6 +116,18 @@ Authorization: Bearer {{login_local.response.body.token}}
 POST {{hostname}}/api/auth/logout
 Authorization: Bearer {{login_local.response.body.token}}
 
+### Get Event Logs
+GET {{hostname}}/api/system/logs/events
+Authorization: Bearer {{login_local.response.body.token}}
+
+### Get Transfer Logs
+GET {{hostname}}/api/system/logs/transfers
+Authorization: Bearer {{login_local.response.body.token}}
+
+### Get System Logs
+GET {{hostname}}/api/system/logs/system
+Authorization: Bearer {{login_local.response.body.token}}
+
 
 #############################################################
 #               REMOTE TESTS (RASPBERRY PI)
@@ -233,4 +245,16 @@ Authorization: Bearer {{login_rpi.response.body.token}}
 
 ### (RED BUTTON #2) Shutdown RPi
 POST {{rpi_hostname}}/api/system/shutdown
+Authorization: Bearer {{login_rpi.response.body.token}}
+
+### Get Event Logs
+GET {{rpi_hostname}}/api/system/logs/events
+Authorization: Bearer {{login_rpi.response.body.token}}
+
+### Get Transfer Logs
+GET {{rpi_hostname}}/api/system/logs/transfers
+Authorization: Bearer {{login_rpi.response.body.token}}
+
+### Get System Logs
+GET {{rpi_hostname}}/api/system/logs/system
 Authorization: Bearer {{login_rpi.response.body.token}}
