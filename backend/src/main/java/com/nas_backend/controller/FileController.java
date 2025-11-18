@@ -50,6 +50,13 @@ public class FileController {
         return user.getUsername();
     }
 
+    private void validatePathSafety(String path) {
+        if (path != null && path.contains("..")) {
+            logger.warn("Path traversal attempt detected: {}", path);
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid path: Using '..' is not allowed.");
+        }
+    }
+
     // Endpoints
 
     @GetMapping("/list")
@@ -58,6 +65,7 @@ public class FileController {
             @RequestParam(name = "path", required = false, defaultValue = "") String path) {
 
         String username = requireValidUser(authHeader);
+        validatePathSafety(path);
         String finalUserPath;
 
         if (path == null || path.isEmpty() || path.equals("/")) {
@@ -96,6 +104,7 @@ public class FileController {
             @RequestParam(name = "file") MultipartFile file) {
 
         String username = requireValidUser(authHeader);
+        validatePathSafety(path);
         String userPath = Paths.get(username, path).toString().replace("\\", "/");
 
         try {
@@ -122,6 +131,7 @@ public class FileController {
             @RequestBody CreateFolderRequest request) {
 
         String username = requireValidUser(authHeader);
+        validatePathSafety(request.logicalPath());
         String fullLogicalPath = Paths.get(username, request.logicalPath()).toString().replace("\\", "/");
 
         try {
@@ -147,6 +157,8 @@ public class FileController {
             @RequestBody MoveRequest moveRequest) {
 
         String username = requireValidUser(authHeader);
+        validatePathSafety(moveRequest.fromPath());
+        validatePathSafety(moveRequest.toPath());
         String userFromPath = Paths.get(username, moveRequest.fromPath()).toString().replace("\\", "/");
         String userToPath = Paths.get(username, moveRequest.toPath()).toString().replace("\\", "/");
 
@@ -187,13 +199,15 @@ public class FileController {
     @DeleteMapping("/delete")
     public ResponseEntity<FileOperationResponse> deleteFile(
             @RequestHeader(name = "Authorization", required = false) String authHeader,
-            @RequestParam(name = "path") String path) {
+            @RequestParam(name = "path") String path,
+            @RequestParam(name = "permanent", defaultValue = "false") boolean permanent) {
 
         String username = requireValidUser(authHeader);
+        validatePathSafety(path);
         String userPath = Paths.get(username, path).toString().replace("\\", "/");
 
         try {
-            FileOperationResponse response = fileService.deleteResource(userPath);
+            FileOperationResponse response = fileService.deleteResource(userPath, permanent);
             return ResponseEntity.ok(response);
         } catch (FileValidationException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new FileOperationResponse("Delete failed: " + e.getMessage(), null));
@@ -221,6 +235,7 @@ public class FileController {
             @RequestBody RestoreRequest request) {
 
         String username = requireValidUser(authHeader);
+        validatePathSafety(request.logicalPath());
         String pathInTrash = request.logicalPath();
 
         if (!pathInTrash.startsWith(username + "/trash/")) {
@@ -256,7 +271,9 @@ public class FileController {
     @GetMapping("/download")
     public ResponseEntity<?> download(@RequestHeader(name = "Authorization", required = false) String authHeader,
             @RequestParam(name = "path") String path) {
+                
         String username = requireValidUser(authHeader);
+        validatePathSafety(path);
         String userPath = Paths.get(username, path).toString().replace("\\", "/");
 
         try {

@@ -158,7 +158,7 @@ public class FileService {
     }
 
     @Transactional
-    public FileOperationResponse deleteResource(String logicalPath) throws IOException, FileValidationException {
+    public FileOperationResponse deleteResource(String logicalPath, boolean permanent) throws IOException, FileValidationException {
         AppConfig config = configService.getConfig();
         logger.warn("Delete request for logical path: {}", logicalPath);
 
@@ -169,7 +169,13 @@ public class FileService {
 
         String userName = rootNodeToDelete.getParentPath().split("/")[0];
 
-        if (config.getTrashCan().isEnabled()) {
+        // Check if the resource is already in trash
+        boolean isAlreadyInTrash = logicalPath.startsWith(userName + "/trash/");
+        
+        // Decide whether to move to trash or permanently delete
+        boolean performPermanentDelete = permanent || !config.getTrashCan().isEnabled() || isAlreadyInTrash;
+
+        if (!performPermanentDelete) {
             long trashQuotaGB = config.getTrashCan().getQuotaGB();
 
             if (trashQuotaGB > 0) {

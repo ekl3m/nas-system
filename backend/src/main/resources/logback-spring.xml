@@ -9,7 +9,8 @@
         <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
             <fileNamePattern>${LOGS}/archived/nas-system-%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
             <maxFileSize>10MB</maxFileSize>
-            <maxHistory>7</maxHistory> </rollingPolicy>
+            <maxHistory>7</maxHistory>
+        </rollingPolicy>
     </appender>
 
     <appender name="EventsLog" class="ch.qos.logback.core.rolling.RollingFileAppender">
@@ -20,7 +21,8 @@
         <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
             <fileNamePattern>${LOGS}/archived/nas-events-%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
             <maxFileSize>10MB</maxFileSize>
-            <maxHistory>90</maxHistory> </rollingPolicy>
+            <maxHistory>90</maxHistory>
+        </rollingPolicy>
     </appender>
 
     <appender name="TransfersLog" class="ch.qos.logback.core.rolling.RollingFileAppender">
@@ -31,7 +33,8 @@
         <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
             <fileNamePattern>${LOGS}/archived/nas-transfers-%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
             <maxFileSize>10MB</maxFileSize>
-            <maxHistory>90</maxHistory> </rollingPolicy>
+            <maxHistory>90</maxHistory>
+        </rollingPolicy>
     </appender>
 
     <root level="INFO">
