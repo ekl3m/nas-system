@@ -6,6 +6,8 @@ import com.nas_backend.model.entity.UserToken;
 import com.nas_backend.repository.UserTokenRepository;
 import com.nas_backend.model.security.UserConfig;
 import com.nas_backend.service.file.FileService;
+import com.nas_backend.service.system.EmailService;
+import com.nas_backend.service.system.LogService;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,13 +38,17 @@ public class AuthService {
     private final Map<String, UserConfig> users = new ConcurrentHashMap<>(); // username -> UserConfig (full user data)
     private final AppConfigService configService;
     private final FileService fileService;
+    private final LogService logService;
+    private final EmailService emailService;
     private final UserTokenRepository userTokenRepository;
 
     private final ObjectMapper mapper = new ObjectMapper();
 
-    public AuthService(AppConfigService configService, FileService fileService, UserTokenRepository userTokenRepository) {
+    public AuthService(AppConfigService configService, FileService fileService, LogService logService, EmailService emailService, UserTokenRepository userTokenRepository) {
         this.configService = configService;
         this.fileService = fileService;
+        this.logService = logService;
+        this.emailService = emailService;
         this.userTokenRepository = userTokenRepository;
     }
 
@@ -56,7 +62,7 @@ public class AuthService {
         File usersFile = Paths.get(rootPath, CONFIG_DIR, USERS_FILE_NAME).toFile();
 
         if (!usersFile.exists()) {
-            System.out.println("users.json not found. Creating default from template...");
+            logger.warn("users.json not found. Creating default from template...");
             try {
                 createDefaultUsersFile(usersFile);
             } catch (IOException e) {
@@ -70,13 +76,15 @@ public class AuthService {
             for (UserConfig u : userList) {
                 if (u.getUsername() == null || u.getUsername().startsWith(".")) {
                     // Critical error. System admin must correct users.json
-                    logger.error("FATAL: Invalid username found in users.json: '{}'. Usernames cannot be null or start with a dot.", u.getUsername());
+                    String msg = "FATAL: Invalid username found in users.json: '" + u.getUsername() + "'. Usernames cannot be null or start with a dot.";
+                    logger.error(msg);
+                    logService.logSystemEvent(msg);
                     throw new RuntimeException("Invalid username in users.json. Usernames cannot be null or start with a dot.");
                 }
                 users.put(u.getUsername(), u);
             }
 
-            System.out.println("Users loaded successfully from " + usersFile.getAbsolutePath());
+            logger.info("Users loaded successfully from " + usersFile.getAbsolutePath());
         } catch (IOException e) {
             throw new RuntimeException("FATAL: Failed to load or parse users.json from " + usersFile.getAbsolutePath(), e);
         }
@@ -88,6 +96,7 @@ public class AuthService {
     public String login(String username, String password) {
         UserConfig user = users.get(username);
         if (user == null || !user.getPassword().equals(password)) {
+            logService.logSystemEvent("SECURITY ALERT: Failed login attempt for user: '" + username + "'");
             throw new RuntimeException("Invalid username or password");
         }
 
@@ -97,11 +106,13 @@ public class AuthService {
             logger.info("Verified virtual root for user: {}", username);
         } catch (Exception e) {
             logger.error("Failed to create/verify root virtual folder for user: {}", username, e);
+            emailService.sendSystemErrorEmail("Login Error: Failed to create virtual root for user " + username + " \nError: " + e.getMessage(), username);
         }
         try {
             ensureUserStoragePaths(username);
         } catch (IOException e) {
             logger.warn("Could not create all physical storage paths for user: {}", username, e);
+            emailService.sendSystemErrorEmail("Login Warning: Failed to create physical storage paths for user " + username + " \nError: " + e.getMessage(), username);
         }
         
         // Clear out old tokens if any exist
@@ -117,16 +128,22 @@ public class AuthService {
         
         // Save token to DB
         userTokenRepository.save(newToken);
-        logger.info("--- LOGIN --- Token stored in DB for user: {}", username);
+
+        logService.logSystemEvent("User '" + username + "' logged in successfully. Session started.");
         return tokenString;
     }
 
     @Transactional
     public void logout(String token) {
         if (token != null) {
+            // Store username for logging purposes
+            Optional<UserToken> tokenOpt = userTokenRepository.findByToken(token);
+            String username = tokenOpt.map(UserToken::getUsername).orElse("Unknown");
+
             // Simply remove from the database (token is @Id)
             userTokenRepository.deleteById(token);
-            logger.info("Auth: User logged out, token {} deleted from DB.", token);
+
+            logService.logSystemEvent("User '" + username + "' logged out.");
         }
     }
 
@@ -179,9 +196,10 @@ public class AuthService {
             if (Files.notExists(userPhysicalPath)) {
                 try {
                     Files.createDirectories(userPhysicalPath);
-                    logger.info("Created missing physical path: {}", userPhysicalPath);
+                    logService.logSystemEvent("System created physical user directory at: " + userPhysicalPath);
                 } catch (IOException e) {
                     logger.error("Failed to create physical path at: {}", userPhysicalPath, e);
+                    throw e; // Rethrow to inform caller
                 }
             }
         }
@@ -195,7 +213,7 @@ public class AuthService {
             }
             byte[] templateData = FileCopyUtils.copyToByteArray(in);
             FileCopyUtils.copy(templateData, usersFile);
-            System.out.println("Default users file created at: " + usersFile.getAbsolutePath());
+            logger.info("Default users file created at: " + usersFile.getAbsolutePath());
             throw new RuntimeException("Default users.json has been created. Please define at least one user before starting the application.");
         }
     }

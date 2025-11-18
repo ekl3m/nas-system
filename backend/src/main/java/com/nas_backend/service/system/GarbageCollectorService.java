@@ -31,13 +31,15 @@ public class GarbageCollectorService {
     private final UserTokenRepository userTokenRepository;
     private final AppConfigService configService;
     private final EmailService emailService;
+    private final LogService logService;
 
     public GarbageCollectorService(FileNodeRepository fileNodeRepository, UserTokenRepository userTokenRepository, AppConfigService configService,
-                                   EmailService emailService) {
+                                   EmailService emailService, LogService logService) {
         this.fileNodeRepository = fileNodeRepository;
         this.userTokenRepository = userTokenRepository;
         this.configService = configService;
         this.emailService = emailService;
+        this.logService = logService;
     }
 
     @Scheduled(cron = "0 0 3 * * ?") // Runs at 3:00 AM daily
@@ -102,20 +104,22 @@ public class GarbageCollectorService {
                 totalDeletedNodes += deletedNodes;
             }
 
-            logger.info("Garbage Collector (Trash): Task finished. Permanently deleted {} total nodes and {} total physical files.", totalDeletedNodes,
-                        totalDeletedFiles);
-
             if (totalDeletedNodes > 0) {
+                String msg = "Garbage Collector (Trash): Permanently deleted " + totalDeletedNodes + " nodes (" + totalDeletedFiles + " physical files).";
+                logger.info(msg);
+                logService.logSystemEvent(msg);
                 emailService.sendSystemSuccessEmail(
-                    "Garbage Collector (Trash) finished successfully.\n" +
+                    "Garbage Collector (Trash) finished successfully. \n" +
                     "Permanently deleted: " + totalDeletedNodes + " nodes (" + totalDeletedFiles + " physical files)."
                 );
             }
         } catch (Exception e) {
-            logger.error("CRITICAL: Garbage Collector (Trash) task failed!", e);
+            String errorMsg = "CRITICAL: Garbage Collector (Trash) task failed! Error: " + e.getMessage();
+            logger.error(errorMsg, e);
+            logService.logSystemEvent(errorMsg);
             emailService.sendSystemErrorEmail(
-                    "The scheduled task 'Garbage Collector (Trash)' failed unexpectedly.\n" +
-                    "The system may require manual cleanup.\n\n" +
+                    "The scheduled task 'Garbage Collector (Trash)' failed unexpectedly. \n" +
+                    "The system may require manual cleanup. \n\n" +
                     "Error: " + e.getMessage(),
                     "System"
             );
@@ -150,18 +154,23 @@ public class GarbageCollectorService {
                 }
             }
 
-            logger.info("Garbage Collector (Orphans): Task finished. Found and removed {} orphan entries.", orphanCount);
-
             if (orphanCount > 0) {
+                String msg = "Garbage Collector (Orphans): Found and removed " + orphanCount + " orphan database entries.";
+                logger.info(msg);
+                logService.logSystemEvent(msg);
                 emailService.sendSystemSuccessEmail(
-                    "Garbage Collector (Orphans) finished successfully.\n" +
+                    "Garbage Collector (Orphans) finished successfully. \n" +
                     "Permanently deleted: " + orphanCount + " orphan entries."
                 );
+            } else {
+                logger.info("Garbage Collector (Orphans): Job done. No orphans found.");
             }
         } catch (Exception e) {
-            logger.error("CRITICAL: Garbage Collector (Orphans) task failed!", e);
+            String errorMsg = "CRITICAL: Garbage Collector (Orphans) task failed! Error: " + e.getMessage();
+            logger.error(errorMsg, e);
+            logService.logSystemEvent(errorMsg);
             emailService.sendSystemErrorEmail(
-                "The scheduled task 'Garbage Collector (Orphans)' failed unexpectedly.\n\n" + 
+                "The scheduled task 'Garbage Collector (Orphans)' failed unexpectedly. \n\n" + 
                 "Error: " + e.getMessage(), "System"
             );
         }
@@ -175,19 +184,23 @@ public class GarbageCollectorService {
             List<UserToken> expired = userTokenRepository.findByExpirationTimeBefore(Instant.now());
             if (!expired.isEmpty()) {
                 userTokenRepository.deleteAll(expired);
-                logger.info("Garbage Collector (Tokens): Cleaned up {} expired tokens.", expired.size());
-                
+
+                String msg = "Garbage Collector (Tokens): Cleaned up " + expired.size() + " expired tokens.";
+                logger.info(msg);
+                logService.logSystemEvent(msg);
                 emailService.sendSystemSuccessEmail(
-                    "Garbage Collector (Tokens) finished successfully.\n" +
+                    "Garbage Collector (Tokens) finished successfully. \n" +
                     "Permanently deleted: " + expired.size() + " expired tokens."
                 );
             } else {
                 logger.info("Garbage Collector (Tokens): No expired tokens found. Job done.");
             }
         } catch (Exception e) {
-            logger.error("CRITICAL: Garbage Collector (Tokens) task failed!", e);
+            String errorMsg = "CRITICAL: Garbage Collector (Tokens) task failed! Error: " + e.getMessage();
+            logger.error(errorMsg, e);
+            logService.logSystemEvent(errorMsg);
             emailService.sendSystemErrorEmail(
-                "The scheduled task 'Garbage Collector (Tokens)' failed unexpectedly.\n\n" + 
+                "The scheduled task 'Garbage Collector (Tokens)' failed unexpectedly. \n\n" + 
                 "Error: " + e.getMessage(), "System"
             );
         }

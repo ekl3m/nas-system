@@ -1,0 +1,49 @@
+<configuration>
+    <property name="LOGS" value="${APP_ROOT_PATH}/logs" />
+
+    <appender name="SystemLog" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOGS}/nas-system.log</file>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOGS}/archived/nas-system-%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>10MB</maxFileSize>
+            <maxHistory>7</maxHistory> </rollingPolicy>
+    </appender>
+
+    <appender name="EventsLog" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOGS}/nas-events.log</file>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} - %msg%n</pattern>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOGS}/archived/nas-events-%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>10MB</maxFileSize>
+            <maxHistory>90</maxHistory> </rollingPolicy>
+    </appender>
+
+    <appender name="TransfersLog" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOGS}/nas-transfers.log</file>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} - %msg%n</pattern>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOGS}/archived/nas-transfers-%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>10MB</maxFileSize>
+            <maxHistory>90</maxHistory> </rollingPolicy>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="SystemLog" />
+    </root>
+
+    <logger name="NAS_EVENTS" level="INFO" additivity="false">
+        <appender-ref ref="EventsLog" />
+    </logger>
+
+    <logger name="NAS_TRANSFERS" level="INFO" additivity="false">
+        <appender-ref ref="TransfersLog" />
+    </logger>
+
+</configuration>

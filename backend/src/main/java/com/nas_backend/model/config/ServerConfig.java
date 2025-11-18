@@ -5,7 +5,6 @@ public class ServerConfig {
     private boolean enableHTTPS;
     private long tokenTTL;
     private int maxUploadSizeMB;
-    private String logLevel;
     private int maxConcurrentUploads;
     private boolean enableEmailNotifications;
     private String adminEmail;
@@ -30,10 +29,6 @@ public class ServerConfig {
 
     public int getMaxUploadSizeMB() {
         return maxUploadSizeMB;
-    }
-
-    public String getLogLevel() {
-        return logLevel;
     }
 
     public int getMaxConcurrentUploads() {
@@ -64,10 +59,6 @@ public class ServerConfig {
 
     public void setMaxUploadSizeMB(int maxUploadSizeMB) {
         this.maxUploadSizeMB = maxUploadSizeMB;
-    }
-
-    public void setLogLevel(String logLevel) {
-        this.logLevel = logLevel;
     }
 
     public void setMaxConcurrentUploads(int maxConcurrentUploads) {

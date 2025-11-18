@@ -4,6 +4,7 @@ import com.nas_backend.model.entity.FileNode;
 import com.nas_backend.repository.FileNodeRepository;
 import com.nas_backend.service.AppConfigService;
 import com.nas_backend.service.system.BackupService;
+import com.nas_backend.service.system.LogService;
 
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
@@ -27,11 +28,13 @@ public class FileIndexService {
     private final FileNodeRepository fileNodeRepository;
     private final AppConfigService configService;
     private final BackupService backupService;
+    private final LogService logService;
 
-    public FileIndexService(AppConfigService appConfigService, FileNodeRepository fileNodeRepository, BackupService backupService) {
+    public FileIndexService(AppConfigService appConfigService, FileNodeRepository fileNodeRepository, BackupService backupService, LogService logService) {
         this.configService = appConfigService;
         this.fileNodeRepository = fileNodeRepository;
         this.backupService = backupService;
+        this.logService = logService;
     }
 
     // If file node DB does not exist, run a backup search
@@ -52,11 +55,15 @@ public class FileIndexService {
         logger.warn("Main database file not found or is empty! Attempting to restore from backup...");
 
         if (restoreFromBackup()) {
-            logger.info("Successfully restored database from backup. Starting application.");
+            String msg = "CRITICAL: Main database was missing/corrupt. System successfully RESTORED from backup.";
+            logger.info(msg);
+            logService.logSystemEvent(msg);
             logger.info("Found {} nodes in restored database.", fileNodeRepository.count());
         } else {
             // Scenario C: Neither file node DB nor backup files were found. What a pity!
-            logger.error("FATAL: No database file and no backups found. Starting with a new, empty database. All logical file structures are lost.");
+            String msg = "FATAL: No database and no backups found. Starting with EMPTY database. Logical structure lost.";
+            logger.error(msg);
+            logService.logSystemEvent(msg);
         }
     }
 

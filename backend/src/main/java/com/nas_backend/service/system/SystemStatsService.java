@@ -69,8 +69,7 @@ public class SystemStatsService {
             effectiveUsableMB = 0;
         }
 
-        logger.info("System Stats: Real Total={}MB, Quota={}MB -> Effective Total={}MB",
-                realTotalMB, quotaMB, effectiveTotalMB);
+        logger.info("System Stats: Real Total={}MB, Quota={}MB -> Effective Total={}MB", realTotalMB, quotaMB, effectiveTotalMB);
 
         // Build and return the final, robust report
         return new SystemStatsResponse(disks, effectiveTotalMB, effectiveUsableMB, temp, usedMem, totalMem);

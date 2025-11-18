@@ -10,16 +10,20 @@ public class SystemAdminService {
     private static final Logger logger = LoggerFactory.getLogger(SystemAdminService.class);
     private final ShellService shellService;
     private final EmailService emailService;
+    private final LogService logService;
 
-    public SystemAdminService(ShellService shellService, EmailService emailService) {
+    public SystemAdminService(ShellService shellService, EmailService emailService, LogService logService) {
         this.shellService = shellService;
         this.emailService = emailService;
+        this.logService = logService;
     }
 
     // Asynchronously executes the reboot command
     public void rebootSystem() {
         logger.warn("SYSTEM ADMIN: Received reboot command! Rebooting in 3 seconds...");
+        logService.logSystemEvent("System reboot initiated by administrator.");
         emailService.sendSystemSuccessEmail("System reboot initiated by administrator via API.");
+
 
         // Launch in a new thread to avoid blocking the HTTP response
         new Thread(() -> {
@@ -29,7 +33,9 @@ public class SystemAdminService {
 
                 if (result == null) {
                     // Shell service returned null, exit code != 0
-                    logger.error("SYSTEM ADMIN: Reboot command failed (exit code error).");
+                    String errorMsg = "CRITICAL: System reboot failed to execute (exit code error).";
+                    logger.error(errorMsg);
+                    logService.logSystemEvent(errorMsg);
                     emailService.sendSystemErrorEmail(
                         "CRITICAL: System reboot failed to execute.\n" +
                         "The command 'sudo /sbin/reboot' returned an error code.\n" +
@@ -38,7 +44,9 @@ public class SystemAdminService {
                     );
                 }
             } catch (Exception e) {
-                logger.error("SYSTEM ADMIN: Reboot thread failed!", e);
+                String errorMsg = "CRITICAL: System reboot thread crashed.";
+                logger.error(errorMsg, e);
+                logService.logSystemEvent(errorMsg + " Error: " + e.getMessage());
                 emailService.sendSystemErrorEmail(
                     "CRITICAL: System reboot thread crashed.\n" +
                     "Error: " + e.getMessage(),
@@ -51,6 +59,7 @@ public class SystemAdminService {
     // Asynchronously executes the shutdown command
     public void shutdownSystem() {
         logger.warn("SYSTEM ADMIN: Received shutdown command! Shutting down in 3 seconds...");
+        logService.logSystemEvent("System shutdown initiated by administrator.");
         emailService.sendSystemSuccessEmail("System shutdown initiated by administrator via API.");
 
         // Launch in a new thread to avoid blocking the HTTP response
@@ -61,7 +70,9 @@ public class SystemAdminService {
 
                 if (result == null) {
                     // Shell service returned null, exit code != 0
-                    logger.error("SYSTEM ADMIN: Shutdown command failed (exit code error).");
+                    String errorMsg = "CRITICAL: System shutdown failed to execute (exit code error).";
+                    logger.error(errorMsg);
+                    logService.logSystemEvent(errorMsg);
                     emailService.sendSystemErrorEmail(
                         "CRITICAL: System shutdown failed to execute.\n" +
                         "The command 'sudo /sbin/shutdown -h now' returned an error code.\n" +
@@ -70,7 +81,9 @@ public class SystemAdminService {
                     );
                 }
             } catch (Exception e) {
-                logger.error("SYSTEM ADMIN: Shutdown thread failed!", e);
+                String errorMsg = "CRITICAL: System shutdown thread crashed.";
+                logger.error(errorMsg, e);
+                logService.logSystemEvent(errorMsg + " Error: " + e.getMessage());
                 emailService.sendSystemErrorEmail(
                     "CRITICAL: System shutdown thread crashed.\n" +
                     "Error: " + e.getMessage(),

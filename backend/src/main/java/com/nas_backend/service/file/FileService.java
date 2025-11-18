@@ -7,6 +7,7 @@ import com.nas_backend.model.dto.FileOperationResponse;
 import com.nas_backend.model.entity.FileNode;
 import com.nas_backend.repository.FileNodeRepository;
 import com.nas_backend.service.AppConfigService;
+import com.nas_backend.service.system.LogService;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,11 +43,13 @@ public class FileService {
 
     private final AppConfigService configService;
     private final FileIndexService fileIndexService;
+    private final LogService logService;
     private final FileNodeRepository fileNodeRepository;
 
-    public FileService(AppConfigService appConfigService, FileIndexService fileIndexService, FileNodeRepository fileNodeRepository) {
+    public FileService(AppConfigService appConfigService, FileIndexService fileIndexService, LogService logService, FileNodeRepository fileNodeRepository) {
         this.configService = appConfigService;
         this.fileIndexService = fileIndexService;
+        this.logService = logService;
         this.fileNodeRepository = fileNodeRepository;
     }
 
@@ -116,6 +119,9 @@ public class FileService {
 
         // Save, translate and return complete report
         FileNode savedNode = fileIndexService.addOrUpdateNode(nodeToSave);
+
+        logService.logTransfer(userName, "UPLOAD", finalLogicalPath, "Size: " + fileSize + " bytes");
+
         return new FileOperationResponse(message, toFileInfo(savedNode));
     }
 
@@ -127,6 +133,9 @@ public class FileService {
         if (node == null) {
             throw new IOException("File not found in index: " + logicalPath);
         }
+
+        String userName = logicalPath.split("/")[0];
+        logService.logTransfer(userName, "DOWNLOAD", logicalPath);
 
         // Verify whether it is a file or a directory
         if (node.isDirectory()) {
@@ -154,11 +163,10 @@ public class FileService {
             throw new IOException("Resource to delete not found in index: " + logicalPath);
         }
 
-        if (config.getTrashCan().isEnabled()) {
-            String originalParentPath = rootNodeToDelete.getParentPath();
-            String userName = originalParentPath.split("/")[0];
-            String trashParentPath = userName + "/trash";
+        String userName = rootNodeToDelete.getParentPath().split("/")[0];
 
+        if (config.getTrashCan().isEnabled()) {
+            String trashParentPath = userName + "/trash";
             String newFileNameInTrash = getUniqueFileName(trashParentPath, rootNodeToDelete.getFileName());
             String newLogicalPathInTrash = Paths.get(trashParentPath, newFileNameInTrash).toString().replace("\\", "/");
 
@@ -167,12 +175,16 @@ public class FileService {
             // Call move engine and catch its report
             FileOperationResponse moveResponse = moveResource(logicalPath, newLogicalPathInTrash);
 
+            logService.logTransfer(userName, "TRASH", logicalPath, "Moved to: " + newLogicalPathInTrash);
+
             // Build a new, precise report
             return new FileOperationResponse("Resource moved to trash successfully.", moveResponse.node());
 
         } else {
             logger.warn("Trash can is disabled. Permanently deleting resources.");
             deleteRecursively(logicalPath);
+
+            logService.logTransfer(userName, "DELETE_PERMANENT", logicalPath);
 
             // Return a report about permanent deletion
             return new FileOperationResponse("Resource permanently deleted.", toFileInfo(rootNodeToDelete));
@@ -196,11 +208,14 @@ public class FileService {
 
         // Calculate the original target path
         String targetLogicalPath = Paths.get(restoreParentPath, rootNodeToRestore.getFileName()).toString().replace("\\", "/");
+        String userName = logicalPathInTrash.split("/")[0];
 
         logger.info("Restoring resource from {} to {}", logicalPathInTrash, targetLogicalPath);
 
         // Call the move engine and catch its report
         FileOperationResponse moveResponse = moveResource(logicalPathInTrash, targetLogicalPath);
+
+        logService.logTransfer(userName, "RESTORE", logicalPathInTrash, "Restored to: " + moveResponse.node().logicalPath());
 
         // Build a new, precise report
         String message = "Resource restored successfully.";
@@ -230,6 +245,7 @@ public class FileService {
         }
 
         String originalParentPath = rootNodeToMove.getParentPath();
+        String userName = originalParentPath.split("/")[0];
 
         // Handle destination conflicts
         String finalLogicalPath = newLogicalPath;
@@ -275,6 +291,7 @@ public class FileService {
         // Save everything at once and perform one backup
         fileIndexService.addOrUpdateNodes(updatedNodes);
 
+        logService.logTransfer(userName, "MOVE", oldLogicalPath, "To: " + finalLogicalPath);
         logger.info("Move complete. Root node '{}' is now at '{}'", oldLogicalPath, finalLogicalPath);
         final String pathForFilter = finalLogicalPath;
 
@@ -366,6 +383,9 @@ public class FileService {
 
         // It is verified that the parent exists, create the current folder
         logger.info("Auto-creating virtual folder in DB: {}", logicalPath);
+
+        String userName = logicalPath.split("/")[0];
+        logService.logTransfer(userName, "CREATE_FOLDER", logicalPath);
 
         FileNode folderNode = new FileNode();
         folderNode.setLogicalPath(logicalPath);
