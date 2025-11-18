@@ -4,6 +4,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import com.nas_backend.repository.FileNodeRepository;
+
 import java.io.IOException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
@@ -19,9 +21,11 @@ public class StorageMetricsService {
 
     private static final Logger logger = LoggerFactory.getLogger(StorageMetricsService.class);
     private final ShellService shellService;
+    private final FileNodeRepository fileNodeRepository;
 
-    public StorageMetricsService(ShellService shellService) {
+    public StorageMetricsService(ShellService shellService, FileNodeRepository fileNodeRepository) {
         this.shellService = shellService;
+        this.fileNodeRepository = fileNodeRepository;
     }
 
     // Calculate total size across multiple storage paths
@@ -74,5 +78,12 @@ public class StorageMetricsService {
             logger.error("Failed to calculate directory size via Java NIO for: {}", path, e);
             return 0;
         }
+    }
+
+    public long calculateTrashSizeFromIndex(String username) {
+        String trashPrefix = username + "/trash/";
+        long size = fileNodeRepository.sumSizeByLogicalPathStartingWith(trashPrefix);
+        logger.info("Calculated logical trash size for user '{}': {} bytes", username, size);
+        return size;
     }
 }

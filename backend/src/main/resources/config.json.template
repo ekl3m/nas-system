@@ -1,10 +1,9 @@
 {
     "server": {
         "hostname": "RaspberryPi-NAS",
-        "enableHTTPS": false,
         "tokenTTL": 3600,
         "maxUploadSizeMB": 5000,
-        "maxConcurrentUploads": 5,
+        "maxConcurrentUploads": 1,
         "enableEmailNotifications": false,
         "adminEmail": "admin@example.com"
     },
@@ -13,7 +12,7 @@
             "/YOUR/FILE/PATH/1",
             "/YOUR/FILE/PATH/2"
         ],
-        "quotaGB": 1000
+        "quotaGB": 0
     },
     "backup": {
         "enabled": true,
@@ -21,11 +20,11 @@
             "/YOUR/BACKUP/FILE/PATH/1",
             "/YOUR/BACKUP/FILE/PATH/2"
         ],
-        "quotaGB": 1000
+        "quotaGB": 0
     },
     "trashCan": {
         "enabled": true,
-        "quotaGB": 50,
+        "quotaGB": 0,
         "retentionDays": 30
     }
 }

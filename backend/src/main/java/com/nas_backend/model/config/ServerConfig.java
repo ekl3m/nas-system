@@ -2,7 +2,6 @@ package com.nas_backend.model.config;
 
 public class ServerConfig {
     private String hostname;
-    private boolean enableHTTPS;
     private long tokenTTL;
     private int maxUploadSizeMB;
     private int maxConcurrentUploads;
@@ -17,10 +16,6 @@ public class ServerConfig {
 
     public String getHostname() {
         return hostname;
-    }
-
-    public boolean isEnableHTTPS() {
-        return enableHTTPS;
     }
     
     public long getTokenTTL() {
@@ -47,10 +42,6 @@ public class ServerConfig {
 
     public void setHostname(String hostname) {
         this.hostname = hostname;
-    }
-
-    public void setEnableHttps(boolean enableHTTPS) {
-        this.enableHTTPS = enableHTTPS;
     }
 
     public void setTokenTTL(long tokenTTL) {

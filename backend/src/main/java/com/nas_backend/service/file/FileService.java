@@ -170,6 +170,31 @@ public class FileService {
         String userName = rootNodeToDelete.getParentPath().split("/")[0];
 
         if (config.getTrashCan().isEnabled()) {
+            long trashQuotaGB = config.getTrashCan().getQuotaGB();
+
+            if (trashQuotaGB > 0) {
+                long trashQuotaBytes = trashQuotaGB * 1024L * 1024L * 1024L;
+
+                // Calculate current trash size
+                long currentTrashSize = storageMetricsService.calculateTrashSizeFromIndex(userName);
+
+                // Calculate size of the resource to delete
+                long resourceSizeToDelete;
+                if (rootNodeToDelete.isDirectory()) {
+                    resourceSizeToDelete = fileNodeRepository.sumSizeByLogicalPathStartingWith(rootNodeToDelete.getLogicalPath() + "/");
+                } else {
+                    resourceSizeToDelete = rootNodeToDelete.getSize();
+                }
+
+                // Verdict
+                if (currentTrashSize + resourceSizeToDelete > trashQuotaBytes) {
+                    String msg = String.format("Trash quota exceeded (%d GB limit). Please empty the trash first.", trashQuotaGB);
+                    logger.warn("Trash quota exceeded for user {}. Operation blocked.", userName);
+
+                    throw new FileValidationException(msg);
+                }
+            }
+
             String trashParentPath = userName + "/trash";
             String newFileNameInTrash = getUniqueFileName(trashParentPath, rootNodeToDelete.getFileName());
             String newLogicalPathInTrash = Paths.get(trashParentPath, newFileNameInTrash).toString().replace("\\", "/");

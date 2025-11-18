@@ -36,4 +36,7 @@ public interface FileNodeRepository extends JpaRepository<FileNode, Long> {
     @Query("SELECT n FROM FileNode n WHERE n.isDirectory = false " + "AND n.parentPath NOT LIKE '%/trash' " + "AND n.logicalPath LIKE :prefix% " +
             "AND (n.mimeType LIKE 'image/%' OR n.mimeType LIKE 'video/%') " + "ORDER BY n.createdAt DESC")
     List<FileNode> findRecentMultimediaFiles(@Param("prefix") String logicalPathPrefix, Pageable pageable);
+
+    @Query("SELECT COALESCE(SUM(n.size), 0) FROM FileNode n WHERE n.logicalPath LIKE :prefix%")
+    long sumSizeByLogicalPathStartingWith(@Param("prefix") String prefix);
 }
