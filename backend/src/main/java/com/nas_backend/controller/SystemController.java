@@ -3,6 +3,7 @@ package com.nas_backend.controller;
 import com.nas_backend.model.dto.SystemStatsResponse;
 import com.nas_backend.model.security.UserConfig;
 import com.nas_backend.service.AuthService;
+import com.nas_backend.service.system.BackupService;
 import com.nas_backend.service.system.LogService;
 import com.nas_backend.service.system.SystemAdminService;
 import com.nas_backend.service.system.SystemStatsService;
@@ -27,12 +28,15 @@ public class SystemController {
     private final AuthService authService;
     private final SystemAdminService systemAdminService;
     private final LogService logService;
+    private final BackupService backupService;
 
-    public SystemController(SystemStatsService systemStatsService, AuthService authService, SystemAdminService systemAdminService, LogService logService) {
+    public SystemController(SystemStatsService systemStatsService, AuthService authService, SystemAdminService systemAdminService, LogService logService,
+                            BackupService backupService) {
         this.systemStatsService = systemStatsService;
         this.authService = authService;
         this.systemAdminService = systemAdminService;
         this.logService = logService;
+        this.backupService = backupService;
     }
 
     private String requireValidUser(String authHeader) {
@@ -103,5 +107,13 @@ public class SystemController {
         // Read nas-system.log
         List<String> logs = logService.getLogFileContent("nas-system.log");
         return ResponseEntity.ok(logs);
+    }
+
+    @PostMapping("/backup/start")
+    public ResponseEntity<?> startFileBackup() {
+        
+        backupService.backupFiles();
+
+        return ResponseEntity.ok(Map.of("message", "File backup initiated. Check system logs for details."));
     }
 }

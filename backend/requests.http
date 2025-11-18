@@ -128,6 +128,10 @@ Authorization: Bearer {{login_local.response.body.token}}
 GET {{hostname}}/api/system/logs/system
 Authorization: Bearer {{login_local.response.body.token}}
 
+### Start File Backup
+POST {{hostname}}/api/system/backup/start
+Authorization: Bearer {{login_local.response.body.token}}
+
 
 #############################################################
 #               REMOTE TESTS (RASPBERRY PI)
@@ -257,4 +261,8 @@ Authorization: Bearer {{login_rpi.response.body.token}}
 
 ### Get System Logs
 GET {{rpi_hostname}}/api/system/logs/system
+Authorization: Bearer {{login_rpi.response.body.token}}
+
+### Start File Backup
+POST {{rpi_hostname}}/api/system/backup/start
 Authorization: Bearer {{login_rpi.response.body.token}}

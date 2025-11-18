@@ -8,6 +8,7 @@ import com.nas_backend.model.entity.FileNode;
 import com.nas_backend.repository.FileNodeRepository;
 import com.nas_backend.service.AppConfigService;
 import com.nas_backend.service.system.LogService;
+import com.nas_backend.service.system.StorageMetricsService;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,12 +45,15 @@ public class FileService {
     private final AppConfigService configService;
     private final FileIndexService fileIndexService;
     private final LogService logService;
+    private final StorageMetricsService storageMetricsService;
     private final FileNodeRepository fileNodeRepository;
 
-    public FileService(AppConfigService appConfigService, FileIndexService fileIndexService, LogService logService, FileNodeRepository fileNodeRepository) {
+    public FileService(AppConfigService appConfigService, FileIndexService fileIndexService, LogService logService, StorageMetricsService storageMetricsService,
+                       FileNodeRepository fileNodeRepository) {
         this.configService = appConfigService;
         this.fileIndexService = fileIndexService;
         this.logService = logService;
+        this.storageMetricsService = storageMetricsService;
         this.fileNodeRepository = fileNodeRepository;
     }
 
@@ -506,24 +510,42 @@ public class FileService {
     }
 
     private String findBestStoragePath(long requiredSpace) throws IOException, FileValidationException {
-        List<String> paths = configService.getConfig().getStorage().getPaths();
-        if (paths.isEmpty())
-            throw new IOException("No storage paths configured!");
+        AppConfig config = configService.getConfig();
+        List<String> paths = config.getStorage().getPaths();
+        if (paths == null || paths.isEmpty()) throw new IOException("No storage paths configured!");
+
+        long quotaGB = config.getStorage().getQuotaGB();
+
+        if (quotaGB > 0) {
+            long quotaBytes = quotaGB * 1024L * 1024L * 1024L;
+
+            // Use method from StorageMetricsService to calculate current used space
+            long currentTotalUsedBytes = storageMetricsService.calculateTotalSize(paths);
+
+            if (currentTotalUsedBytes + requiredSpace > quotaBytes) {
+                throw new FileValidationException("Storage Quota Exceeded! The system limit is " + quotaGB + " GB.");
+            }
+        }
+
         String bestPath = null;
         long maxFreeSpace = -1;
+
         for (String pathStr : paths) {
             Path path = Paths.get(pathStr);
+
             if (Files.notExists(path)) Files.createDirectories(path);
+
             FileStore store = Files.getFileStore(path);
             long usableSpace = store.getUsableSpace();
+
             if (usableSpace > maxFreeSpace) {
                 maxFreeSpace = usableSpace;
                 bestPath = pathStr;
             }
         }
-        if (bestPath == null || maxFreeSpace < requiredSpace) {
-            throw new FileValidationException("Not enough space on any storage device.");
-        }
+
+        if (bestPath == null || maxFreeSpace < requiredSpace) throw new FileValidationException("Not enough space on any storage device.");
+
         return bestPath;
     }
 }
