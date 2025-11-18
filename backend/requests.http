@@ -176,6 +176,18 @@ Content-Type: image/png
 < /Users/sqstudio/Desktop/zdjecie.png
 --WebAppBoundary--
 
+### Upload a file that is too big (to admin/testy)
+POST {{rpi_hostname}}/api/files/upload?path=testy
+Authorization: Bearer {{login_rpi.response.body.token}}
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="file"; filename="mock.png"
+Content-Type: image/png
+
+< /Users/sqstudio/Desktop/mock.png
+--WebAppBoundary--
+
 ### Move/Rename file on RPi
 PUT {{rpi_hostname}}/api/files/move
 Authorization: Bearer {{login_rpi.response.body.token}}
