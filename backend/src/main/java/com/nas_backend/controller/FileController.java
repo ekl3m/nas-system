@@ -22,12 +22,16 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import io.swagger.v3.oas.annotations.tags.*;
+import io.swagger.v3.oas.annotations.Operation;
+
 import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/files")
+@Tag(name = "File management", description = "Endpoints for managing user files and folders")
 public class FileController {
 
     private final FileService fileService;
@@ -60,6 +64,7 @@ public class FileController {
     // Endpoints
 
     @GetMapping("/list")
+    @Operation(summary = "List files", description = "List files and folders at a given logical path")
     public ResponseEntity<List<FileInfo>> listFiles(
             @RequestHeader(name = "Authorization", required = false) String authHeader,
             @RequestParam(name = "path", required = false, defaultValue = "") String path) {
@@ -82,6 +87,7 @@ public class FileController {
     }
 
     @GetMapping("/recent")
+    @Operation(summary = "List recent files", description = "List recently added files with optional filtering for multimedia files")
     public ResponseEntity<List<FileInfo>> listRecentFiles(
             @RequestHeader(name = "Authorization", required = false) String authHeader,
             @RequestParam(name = "limit", defaultValue = "5") int limit, 
@@ -98,6 +104,7 @@ public class FileController {
     }
 
     @PostMapping("/upload")
+    @Operation(summary = "Upload file", description = "Upload a file to a specified logical path")
     public ResponseEntity<FileOperationResponse> upload(
             @RequestHeader(name = "Authorization", required = false) String authHeader,
             @RequestParam(name = "path") String path,
@@ -126,6 +133,7 @@ public class FileController {
     }
 
     @PostMapping("/folders/create")
+    @Operation(summary = "Create folder", description = "Create a new folder at a specified logical path")
     public ResponseEntity<FileOperationResponse> createFolder(
             @RequestHeader(name = "Authorization", required = false) String authHeader,
             @RequestBody CreateFolderRequest request) {
@@ -152,6 +160,7 @@ public class FileController {
     }
 
     @PutMapping("/move")
+    @Operation(summary = "Move or rename resource", description = "Move or rename a file or folder from one logical path to another")
     public ResponseEntity<FileOperationResponse> moveResource(
             @RequestHeader(name = "Authorization", required = false) String authHeader,
             @RequestBody MoveRequest moveRequest) {
@@ -197,6 +206,7 @@ public class FileController {
     }
 
     @DeleteMapping("/delete")
+    @Operation(summary = "Delete resource", description = "Delete a file or folder at a specified logical path, with option for permanent deletion")
     public ResponseEntity<FileOperationResponse> deleteFile(
             @RequestHeader(name = "Authorization", required = false) String authHeader,
             @RequestParam(name = "path") String path,
@@ -230,6 +240,7 @@ public class FileController {
     }
 
     @PostMapping("/restore")
+    @Operation(summary = "Restore resource from trash", description = "Restore a file or folder from the trash to its original location")
     public ResponseEntity<FileOperationResponse> restoreResource(
             @RequestHeader(name = "Authorization", required = false) String authHeader,
             @RequestBody RestoreRequest request) {
@@ -269,6 +280,7 @@ public class FileController {
     }
 
     @GetMapping("/download")
+    @Operation(summary = "Download file", description = "Download a file from a specified logical path, also applies to folders (zipped)")
     public ResponseEntity<?> download(@RequestHeader(name = "Authorization", required = false) String authHeader,
             @RequestParam(name = "path") String path) {
                 

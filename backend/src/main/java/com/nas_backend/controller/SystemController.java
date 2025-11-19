@@ -17,11 +17,15 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import io.swagger.v3.oas.annotations.tags.*;
+import io.swagger.v3.oas.annotations.Operation;
+
 import java.util.List;
 import java.util.Map;
 
 @RestController
 @RequestMapping("/api/system")
+@Tag(name = "System", description = "Endpoints for system management and monitoring")
 public class SystemController {
 
     private final SystemStatsService systemStatsService;
@@ -49,6 +53,7 @@ public class SystemController {
     }
 
     @GetMapping("/stats")
+    @Operation(summary = "Get system statistics", description = "Retrieve current system statistics including CPU, memory and disk usage")
     public ResponseEntity<SystemStatsResponse> getSystemStats(@RequestHeader(name = "Authorization", required = false) String authHeader) {
         requireValidUser(authHeader);
 
@@ -60,6 +65,7 @@ public class SystemController {
     }
 
     @PostMapping("/reboot")
+    @Operation(summary = "Reboot system", description = "Reboot the entire system")
     public ResponseEntity<?> rebootSystem(@RequestHeader(name = "Authorization", required = false) String authHeader) {
         requireValidUser(authHeader); 
         
@@ -70,6 +76,7 @@ public class SystemController {
     }
 
     @PostMapping("/shutdown")
+    @Operation(summary = "Shutdown system", description = "Shutdown the entire system")
     public ResponseEntity<?> shutdownSystem(@RequestHeader(name = "Authorization", required = false) String authHeader) {
         requireValidUser(authHeader); 
         
@@ -80,6 +87,7 @@ public class SystemController {
     }
 
     @GetMapping("/logs/events")
+    @Operation(summary = "Get event logs", description = "Retrieve logs related to system events")
     public ResponseEntity<List<String>> getEventLogs(@RequestHeader(name = "Authorization", required = false) String authHeader) {
 
         requireValidUser(authHeader);
@@ -90,6 +98,7 @@ public class SystemController {
     }
 
     @GetMapping("/logs/transfers")
+    @Operation(summary = "Get transfer logs", description = "Retrieve logs related to file transfers")
     public ResponseEntity<List<String>> getTransferLogs(@RequestHeader(name = "Authorization", required = false) String authHeader) {
 
         requireValidUser(authHeader);
@@ -100,6 +109,7 @@ public class SystemController {
     }
 
     @GetMapping("/logs/system")
+    @Operation(summary = "Get system logs", description = "Retrieve logs related to system operations")
     public ResponseEntity<List<String>> getSystemLogs(@RequestHeader(name = "Authorization", required = false) String authHeader) {
 
         requireValidUser(authHeader);
@@ -110,8 +120,11 @@ public class SystemController {
     }
 
     @PostMapping("/backup/start")
-    public ResponseEntity<?> startFileBackup() {
+    @Operation(summary = "Start file backup", description = "Manually initiate a backup of files")
+    public ResponseEntity<?> startFileBackup(@RequestHeader(name = "Authorization", required = false) String authHeader) {
         
+        requireValidUser(authHeader);
+
         backupService.backupFiles();
 
         return ResponseEntity.ok(Map.of("message", "File backup initiated. Check system logs for details."));
