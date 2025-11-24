@@ -18,4 +18,7 @@ public interface SystemMonitor {
 
     // Returns total RAM in megabytes
     long getTotalMemoryMB();
+
+    // Returns system uptime as a human-readable string
+    String getSystemUptime();
 }

@@ -121,5 +121,38 @@ public class RaspberrySystemMonitor implements SystemMonitor {
             logger.error("Failed to parse 'total' memory from 'free -m' output", e);
         }
         return -1;
-    }   
+    }
+
+    // Gets system uptime by reading /proc/uptime
+    @Override
+    public String getSystemUptime() {
+        try {
+            // Result e.g. "345234.44 23423.55" (uptime idle_time)
+            String result = shellService.executeCommand("cat /proc/uptime");
+            
+            if (result == null || result.isBlank()) {
+                return "Unknown";
+            }
+
+            // Take the first number (uptime in seconds)
+            double uptimeSecondsDouble = Double.parseDouble(result.trim().split("\\s+")[0]);
+            long uptimeSeconds = (long) uptimeSecondsDouble;
+
+            long days = uptimeSeconds / (24 * 3600);
+            long hours = (uptimeSeconds % (24 * 3600)) / 3600;
+            long minutes = (uptimeSeconds % 3600) / 60;
+
+            // Build string in format: "X d Y h Z m"
+            StringBuilder sb = new StringBuilder();
+            if (days > 0) sb.append(days).append("d ");
+            if (hours > 0 || days > 0) sb.append(hours).append("h "); // Show hours if there are days, even if h=0
+            sb.append(minutes).append("m");
+
+            return sb.toString().trim();
+            
+        } catch (Exception e) {
+            logger.error("Failed to parse system uptime", e);
+            return "Error";
+        }
+    }
 }
