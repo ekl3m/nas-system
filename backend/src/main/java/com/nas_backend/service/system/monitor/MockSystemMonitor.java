@@ -42,4 +42,9 @@ public class MockSystemMonitor implements SystemMonitor {
     public long getTotalMemoryMB() {
         return 8192; // 8GB RAM
     }
+
+    @Override
+    public String getSystemUptime() {
+        return "5d 12h 53m"; // Example uptime
+    }
 }

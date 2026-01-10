@@ -33,6 +33,7 @@ public class SystemStatsService {
         double temp = monitor.getCpuTemperature();
         long usedMem = monitor.getUsedMemoryMB();
         long totalMem = monitor.getTotalMemoryMB();
+        String uptime = monitor.getSystemUptime();
 
         // Do some quick math (sum up disks)
         long realTotalMB = disks.stream()
@@ -72,6 +73,6 @@ public class SystemStatsService {
         logger.info("System Stats: Real Total={}MB, Quota={}MB -> Effective Total={}MB", realTotalMB, quotaMB, effectiveTotalMB);
 
         // Build and return the final, robust report
-        return new SystemStatsResponse(disks, effectiveTotalMB, effectiveUsableMB, temp, usedMem, totalMem);
+        return new SystemStatsResponse(disks, effectiveTotalMB, effectiveUsableMB, temp, usedMem, totalMem, uptime);
     }
 }

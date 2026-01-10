@@ -12,5 +12,6 @@ public record SystemStatsResponse(
     // System statistics (CPU/RAM)
     double cpuTemperature, // In degrees Celsius
     long usedMemoryMB,
-    long totalMemoryMB
+    long totalMemoryMB,
+    String systemUptime
 ) {}
